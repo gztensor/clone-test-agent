@@ -73,11 +73,41 @@ async function main() {
     ownerHotkey,
     "passive owner-hotkey lock"
   );
-  assertConvictionZero(
+  assertConvictionAtLeast(
     ownerHotkeyLock,
-    "non-owner coldkey lock to subnet owner hotkey should not receive immediate owner-coldkey conviction"
+    ownerHotkeyLockAmount,
+    "non-owner coldkey lock to subnet owner hotkey should receive immediate owner conviction"
   );
-  console.log("passive owner-hotkey non-owner lock conviction:", formatLock(ownerHotkeyLock));
+  const ownerAggregate = await requireAggregateLock("ownerLock", netuid, ownerHotkey, "perpetual owner aggregate lock");
+  assertConvictionAtLeast(
+    ownerAggregate,
+    ownerHotkeyLockAmount,
+    "OwnerLock should include immediate owner conviction"
+  );
+  await assertNoAggregateLock("hotkeyLock", netuid, ownerHotkey, "owner-hotkey lock should not use general HotkeyLock");
+  console.log("perpetual owner aggregate lock:", formatLock(ownerAggregate));
+  console.log("passive owner-hotkey immediate conviction:", formatLock(ownerHotkeyLock));
+
+  await submitAndWait(
+    api,
+    ownerHotkeySource,
+    api.tx.subtensorModule.setPerpetualLock(netuid, false),
+    "setPerpetualLock false for owner-hotkey lock"
+  );
+  await requireDecayingFlag(ownerHotkeySource.address, netuid);
+  const decayingOwnerAggregate = await requireAggregateLock(
+    "decayingOwnerLock",
+    netuid,
+    ownerHotkey,
+    "decaying owner aggregate lock"
+  );
+  assertConvictionAtLeast(
+    decayingOwnerAggregate,
+    ownerHotkeyLockAmount,
+    "DecayingOwnerLock should retain immediate owner conviction"
+  );
+  await assertNoAggregateLock("decayingHotkeyLock", netuid, ownerHotkey, "owner-hotkey lock should not use general DecayingHotkeyLock");
+  console.log("decaying owner aggregate lock:", formatLock(decayingOwnerAggregate));
 
   const alphaAdded = await addStake(source, originHotkey, netuid);
   assert.ok(alphaAdded > 4n, "addStake returned too little alpha to exercise lock transfer");
@@ -87,7 +117,7 @@ async function main() {
   await lockStake(source, originHotkey, netuid, initialLockAmount, "initial lockStake");
   let sourceLock = await requireLock(source.address, netuid, originHotkey, "source initial lock");
   assert.equal(sourceLock.lockedMass, initialLockAmount, "initial Lock.lockedMass did not match locked amount");
-  await requireAggregateLock("hotkeyLock", netuid, originHotkey, "initial perpetual aggregate lock");
+  await requireAggregateLock("hotkeyLock", netuid, originHotkey, "perpetual general aggregate lock");
   await assertNoLock(destination.address, netuid, originHotkey, "destination should start without this lock");
   console.log("initial lock:", formatLock(sourceLock));
 
@@ -114,7 +144,7 @@ async function main() {
     "setPerpetualLock false"
   );
   await requireDecayingFlag(source.address, netuid);
-  await requireAggregateLock("decayingHotkeyLock", netuid, originHotkey, "decaying aggregate lock");
+  await requireAggregateLock("decayingHotkeyLock", netuid, originHotkey, "decaying general aggregate lock");
   console.log("setPerpetualLock(false): ok");
 
   await waitForFinalizedBlocks(BLOCKS_BETWEEN_LOCK_ACTIONS);
@@ -218,6 +248,8 @@ function assertLockMetadataAvailable() {
     ["SubtensorModule.Lock", api.query.subtensorModule?.lock],
     ["SubtensorModule.HotkeyLock", api.query.subtensorModule?.hotkeyLock],
     ["SubtensorModule.DecayingHotkeyLock", api.query.subtensorModule?.decayingHotkeyLock],
+    ["SubtensorModule.OwnerLock", api.query.subtensorModule?.ownerLock],
+    ["SubtensorModule.DecayingOwnerLock", api.query.subtensorModule?.decayingOwnerLock],
     ["SubtensorModule.DecayingLock", api.query.subtensorModule?.decayingLock],
     ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.Owner", api.query.subtensorModule?.owner],
@@ -324,9 +356,28 @@ async function assertNoLock(coldkey, netuid, hotkey, label) {
 }
 
 async function requireAggregateLock(storageName, netuid, hotkey, label) {
-  const maybeLock = await api.query.subtensorModule[storageName](netuid, hotkey);
-  assert.ok(maybeLock.isSome, `${label}: expected ${storageName}(${netuid}, ${hotkey}) to exist`);
+  const maybeLock = await queryAggregateLock(storageName, netuid, hotkey);
+  assert.ok(maybeLock.isSome, `${label}: expected ${aggregateLabel(storageName, netuid, hotkey)} to exist`);
   return decodeLockState(maybeLock.unwrap());
+}
+
+async function assertNoAggregateLock(storageName, netuid, hotkey, label) {
+  const maybeLock = await queryAggregateLock(storageName, netuid, hotkey);
+  assert.ok(maybeLock.isNone, `${label}: unexpected ${aggregateLabel(storageName, netuid, hotkey)} exists`);
+}
+
+function queryAggregateLock(storageName, netuid, hotkey) {
+  if (storageName === "ownerLock" || storageName === "decayingOwnerLock") {
+    return api.query.subtensorModule[storageName](netuid);
+  }
+  return api.query.subtensorModule[storageName](netuid, hotkey);
+}
+
+function aggregateLabel(storageName, netuid, hotkey) {
+  if (storageName === "ownerLock" || storageName === "decayingOwnerLock") {
+    return `${storageName}(${netuid})`;
+  }
+  return `${storageName}(${netuid}, ${hotkey})`;
 }
 
 async function requireDecayingFlag(coldkey, netuid) {
@@ -431,6 +482,14 @@ function parseBigIntish(value) {
     return BigInt(value.replaceAll(",", ""));
   }
   throw new Error(`could not decode conviction bits from ${value}`);
+}
+
+function assertConvictionAtLeast(lock, wholeConviction, label) {
+  const wholeBits = wholeConviction << 64n;
+  assert.ok(
+    lock.convictionBits >= wholeBits,
+    `${label}: conviction ${lock.conviction} is less than ${wholeConviction}`
+  );
 }
 
 function assertConvictionNonZero(lock, label) {
