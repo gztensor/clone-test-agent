@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ApiPromise, Keyring, WsProvider } from "@polkadot/api";
+import { Keyring } from "@polkadot/api";
+
+import { connectApi } from "../lib/api.js";
+import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 
@@ -22,6 +25,8 @@ const WASM_PATH = process.env.RUNTIME_WASM_PATH ?? DEFAULT_WASM_PATH;
 
 const keyring = new Keyring({ type: "sr25519" });
 const alice = keyring.addFromUri("//Alice");
+const logger = createTempLogger("runtime-update-alice.log");
+logger.captureConsole();
 
 function formatDispatchError(api, error) {
   if (!error.isModule) {
@@ -72,48 +77,56 @@ async function submitAndWait(api, signer, tx, label) {
 }
 
 async function connect() {
-  const provider = new WsProvider(WS_ENDPOINT);
-  return ApiPromise.create({ provider });
+  return connectApi(WS_ENDPOINT, { log: console.log });
 }
 
-assert.ok(fs.existsSync(WASM_PATH), `runtime wasm not found: ${WASM_PATH}`);
+async function main() {
+  await logger.start();
+  assert.ok(fs.existsSync(WASM_PATH), `runtime wasm not found: ${WASM_PATH}`);
 
-let api = await connect();
+  let api = await connect();
 
-try {
-  assert.ok(api.tx.sudo?.sudo, "Sudo.sudo is not available in runtime metadata");
-  assert.ok(api.tx.system?.setCode, "System.setCode is not available in runtime metadata");
+  try {
+    assert.ok(api.tx.sudo?.sudo, "Sudo.sudo is not available in runtime metadata");
+    assert.ok(api.tx.system?.setCode, "System.setCode is not available in runtime metadata");
 
-  const sudoKey = await api.query.sudo.key();
-  assert.equal(
-    sudoKey.toString(),
-    alice.address,
-    `Alice is not the sudo key; sudo key is ${sudoKey.toString()}`
-  );
+    const sudoKey = await api.query.sudo.key();
+    assert.equal(
+      sudoKey.toString(),
+      alice.address,
+      `Alice is not the sudo key; sudo key is ${sudoKey.toString()}`
+    );
 
-  const before = await api.rpc.state.getRuntimeVersion();
-  const wasm = fs.readFileSync(WASM_PATH);
+    const before = await api.rpc.state.getRuntimeVersion();
+    const wasm = fs.readFileSync(WASM_PATH);
 
-  console.log("endpoint:", WS_ENDPOINT);
-  console.log("sudo:", alice.address);
-  console.log("runtime before:", before.specName.toString(), before.specVersion.toString());
-  console.log("wasm:", WASM_PATH);
-  console.log("wasm bytes:", wasm.length);
+    console.log("endpoint:", WS_ENDPOINT);
+    console.log("sudo:", alice.address);
+    console.log("runtime before:", before.specName.toString(), before.specVersion.toString());
+    console.log("wasm:", WASM_PATH);
+    console.log("wasm bytes:", wasm.length);
 
-  const blockHash = await submitAndWait(
-    api,
-    alice,
-    api.tx.sudo.sudo(api.tx.system.setCode(`0x${wasm.toString("hex")}`)),
-    "runtime upgrade"
-  );
+    const blockHash = await submitAndWait(
+      api,
+      alice,
+      api.tx.sudo.sudo(api.tx.system.setCode(`0x${wasm.toString("hex")}`)),
+      "runtime upgrade"
+    );
 
-  console.log("runtime upgrade finalized in block:", blockHash);
+    console.log("runtime upgrade finalized in block:", blockHash);
 
-  await api.disconnect();
-  api = await connect();
+    await api.disconnect();
+    api = await connect();
 
-  const after = await api.rpc.state.getRuntimeVersion();
-  console.log("runtime after:", after.specName.toString(), after.specVersion.toString());
-} finally {
-  await api.disconnect();
+    const after = await api.rpc.state.getRuntimeVersion();
+    console.log("runtime after:", after.specName.toString(), after.specVersion.toString());
+  } finally {
+    await api.disconnect();
+  }
 }
+
+main().then(() => logger.flush()).catch(async (error) => {
+  await logger.error(error);
+  await logger.flush();
+  process.exit(1);
+});

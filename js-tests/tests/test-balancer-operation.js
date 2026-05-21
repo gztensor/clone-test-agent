@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { ApiPromise, Keyring, WsProvider } from "@polkadot/api";
+import { Keyring } from "@polkadot/api";
+
+import { connectApi } from "../lib/api.js";
+import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const TRANSFER_AMOUNT = 1_000_000_000n;
@@ -18,11 +21,16 @@ const TRANSFER_DEST_URI = process.env.TRANSFER_DEST_URI ?? "//Bob";
 const keyring = new Keyring({ type: "sr25519" });
 const transferSource = keyring.addFromUri(TRANSFER_SOURCE_URI);
 const transferDest = keyring.addFromUri(TRANSFER_DEST_URI);
+const logger = createTempLogger("test-balancer-operation.log");
+logger.captureConsole();
 
-const provider = new WsProvider(WS_ENDPOINT);
-const api = await ApiPromise.create({ provider });
+let api;
 
-try {
+async function main() {
+  await logger.start();
+  api = await connect();
+
+  try {
   const chain = await api.rpc.system.chain();
   const runtimeVersion = await api.rpc.state.getRuntimeVersion();
   const startHeader = await api.rpc.chain.getHeader();
@@ -40,9 +48,20 @@ try {
   }
 
   assert.equal(failures.length, 0, `balancer operation test failed:\n${failures.join("\n")}`);
-} finally {
-  await api.disconnect();
+  } finally {
+    await api.disconnect();
+  }
 }
+
+async function connect() {
+  return connectApi(WS_ENDPOINT, { log: console.log });
+}
+
+main().then(() => logger.flush()).catch(async (error) => {
+  await logger.error(error);
+  await logger.flush();
+  process.exit(1);
+});
 
 async function check(label, fn, failures) {
   try {

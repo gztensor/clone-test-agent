@@ -35,12 +35,14 @@ All prompts should be handled using the following steps that are described in mo
 
 1. Make the mainnet clone
 2. Start the mainnet clone
-3. Run clone-smoke-test.js to ensure connectivity and correct operation of the clone
-4. Runtime upgrade
-5. Run clone-smoke-test.js again
-6. Write and execute JS test
-7. Cleanup by calling `stop-local-clone.sh`
-8. Create git commit with commit message no longer than 1 line and push
+3. Confirm block production, not just websocket availability
+4. Run clone-smoke-test.js to ensure connectivity and correct operation of the clone
+5. Runtime upgrade
+6. Run clone-smoke-test.js again
+7. Write and execute JS test
+7a. If the JS test was edited after any run, rerun the final saved test file end-to-end before cleanup.
+8. Cleanup by calling `stop-local-clone.sh`
+9. Commit and push
 
 ## Make the mainnet clone
 
@@ -53,6 +55,10 @@ All prompts should be handled using the following steps that are described in mo
 
 - Run `./scripts/start-local-clone` in the foreground.
 - The node will initialize and start responding only in 90-120 seconds or more.
+- Do not treat `ws://127.0.0.1:9944` listening as sufficient readiness.
+- After the websocket starts listening, wait until the node is actively producing blocks before running smoke tests, runtime upgrades, or JS tests.
+- Verify block production by polling `api.rpc.chain.getHeader()` until the block number increases at least twice across separate polls.
+- Only continue once block height is advancing. If block height is stuck, keep waiting or report that the clone is not ready.
 
 ## Runtime upgrade
 
@@ -93,3 +99,35 @@ tmp.js
 ```
 
 After you execute the test, whether the functionality is confimed to work ok or fails, output the results.
+
+Final verification rule:
+- After any edit to a JS test file, always run the final saved file version end-to-end against a fresh or still-running upgraded clone.
+- Do not count earlier inline probes, partial reproductions, or pre-edit runs as final verification.
+- If the node was stopped after a partial run, restart the local clone, confirm block production again, run the runtime upgrade if needed, and execute the final test file.
+- Only report the test as passed if the final saved file version was executed after the last edit and completed successfully.
+- If the final saved file cannot be executed, say explicitly that only syntax or partial inline verification was completed.
+
+## Commit and push
+
+- When the LLM model believes the requested test or investigation is done, it must create a git commit and push it.
+- This applies every time a test was added or modified and the final results have been reported.
+- If the final saved test file was not executed end-to-end after the last edit, LLM must either:
+  - restart the clone workflow and run the final saved test file before committing, or
+  - explicitly report that the work is not done and must not commit yet.
+- Do not leave completed test changes uncommitted.
+- The commit message must be one line.
+
+## Polkadot API script pattern
+
+- All JS scripts/tests that use `@polkadot/api` must wrap execution in `async function main() { ... }`.
+- At the bottom of the file, call `main().catch((err) => { console.error(err); process.exit(1); });`.
+- Do not use top-level awaited API setup as the script entrypoint.
+- After creating the API with `ApiPromise.create({ provider })`, always `await api.isReady` before making RPC, query, or tx calls.
+- Always disconnect in a `finally` block.
+
+## Test output logs
+
+- Route JS test command output through files under `js-tests/temp/`: do not rely on the standard output and use file i/o in the tests. Use fs for text file blocking output only. Do not try to rely on console.log when you monitor tests. Prefer using the existing `js-tests/lib/file-log.js` helper for JS test logs.
+- Keep `js-tests/temp/.gitkeep` tracked and ignore generated files in that folder.
+- When reporting test results, read and summarize the relevant `js-tests/temp/*.log` file.
+- Do not leave important test output only in terminal scrollback.

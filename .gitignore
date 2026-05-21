@@ -1,3 +1,5 @@
 .local-chain
 subtensor-reference
 js-tests/node_modules
+js-tests/temp/*
+!js-tests/temp/.gitkeep
