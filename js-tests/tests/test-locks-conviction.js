@@ -13,12 +13,15 @@ const RUN_ID = process.env.LOCK_TEST_RUN_ID ?? `run${Date.now()}p${process.pid}`
 const FUND_SOURCE_URI = process.env.LOCK_TEST_FUND_SOURCE_URI ?? "//Alice";
 const TRANSFER_SOURCE_URI = process.env.TRANSFER_SOURCE_URI ?? `//LockConvictionTest//${RUN_ID}//source`;
 const TRANSFER_DEST_URI = process.env.TRANSFER_DEST_URI ?? `//LockConvictionTest//${RUN_ID}//destination`;
+const OWNER_HOTKEY_SOURCE_URI =
+  process.env.OWNER_HOTKEY_SOURCE_URI ?? `//LockConvictionTest//${RUN_ID}//owner-hotkey-source`;
 const BLOCKS_BETWEEN_LOCK_ACTIONS = Number(process.env.LOCK_TEST_WAIT_BLOCKS ?? 3);
 
 const keyring = new Keyring({ type: "sr25519" });
 const fundSource = keyring.addFromUri(FUND_SOURCE_URI);
 const source = keyring.addFromUri(TRANSFER_SOURCE_URI);
 const destination = keyring.addFromUri(TRANSFER_DEST_URI);
+const ownerHotkeySource = keyring.addFromUri(OWNER_HOTKEY_SOURCE_URI);
 const logger = createTempLogger("test-locks-conviction.log");
 logger.captureConsole();
 
@@ -41,18 +44,42 @@ async function main() {
   const rates = await readRates();
   console.log("lock rates:", `unlock=${rates.unlockRate}`, `maturity=${rates.maturityRate}`);
 
-  const { netuid, hotkeys } = await findTestSubnet();
+  const { netuid, ownerHotkey, hotkeys } = await findTestSubnet();
   const [originHotkey, destinationHotkey] = hotkeys;
   console.log("run id:", RUN_ID);
   console.log("source coldkey:", source.address);
   console.log("destination coldkey:", destination.address);
+  console.log("owner-hotkey source coldkey:", ownerHotkeySource.address);
   console.log("test subnet:", netuid);
+  console.log("subnet owner hotkey:", ownerHotkey);
   console.log("origin hotkey:", originHotkey);
   console.log("move-lock destination hotkey:", destinationHotkey);
 
-  await fundSourceAccount();
+  await fundAccount(source, "source");
+  await fundAccount(ownerHotkeySource, "owner-hotkey source");
 
-  const alphaAdded = await addStake(originHotkey, netuid);
+  const ownerHotkeyAlphaAdded = await addStake(ownerHotkeySource, ownerHotkey, netuid);
+  const ownerHotkeyLockAmount = ownerHotkeyAlphaAdded / 2n;
+  await lockStake(
+    ownerHotkeySource,
+    ownerHotkey,
+    netuid,
+    ownerHotkeyLockAmount,
+    "passive owner-hotkey lockStake"
+  );
+  const ownerHotkeyLock = await requireLock(
+    ownerHotkeySource.address,
+    netuid,
+    ownerHotkey,
+    "passive owner-hotkey lock"
+  );
+  assertConvictionZero(
+    ownerHotkeyLock,
+    "non-owner coldkey lock to subnet owner hotkey should not receive immediate owner-coldkey conviction"
+  );
+  console.log("passive owner-hotkey non-owner lock conviction:", formatLock(ownerHotkeyLock));
+
+  const alphaAdded = await addStake(source, originHotkey, netuid);
   assert.ok(alphaAdded > 4n, "addStake returned too little alpha to exercise lock transfer");
   console.log("alpha added:", alphaAdded.toString());
 
@@ -135,6 +162,7 @@ async function main() {
     "same-subnet transfer did not reduce source locked mass"
   );
   assert.ok(destinationAfterTransfer.lockedMass > 0n, "same-subnet transfer did not move locked mass");
+  assertConvictionNonZero(destinationAfterTransfer, "destination transferred lock should have conviction before moveLock");
   console.log("source lock after same-subnet transfer:", formatLock(sourceAfterTransfer));
   console.log("destination lock after same-subnet transfer:", formatLock(destinationAfterTransfer));
 
@@ -149,6 +177,7 @@ async function main() {
   await assertNoLock(destination.address, netuid, originHotkey, "moved lock should leave origin hotkey");
   const movedLock = await requireLock(destination.address, netuid, destinationHotkey, "moved destination lock");
   assert.ok(movedLock.lockedMass > 0n, "moveLock created an empty lock");
+  assertConvictionZero(movedLock, "moveLock to a hotkey owned by a different coldkey should reset conviction");
   console.log("moved destination lock:", formatLock(movedLock));
 
   await submitAndWait(
@@ -162,7 +191,7 @@ async function main() {
   console.log("setPerpetualLock(true): ok");
 
   console.log("locks and conviction live-clone test: ok");
-  console.log("not tested on this clone: owner-coldkey immediate conviction and owner reassignment require controlling an existing subnet owner; ownership reassignment is also disabled in current coinbase code.");
+  console.log("not tested on this clone: owner reassignment is disabled in current coinbase code.");
   } finally {
     await api.disconnect();
   }
@@ -190,6 +219,8 @@ function assertLockMetadataAvailable() {
     ["SubtensorModule.HotkeyLock", api.query.subtensorModule?.hotkeyLock],
     ["SubtensorModule.DecayingHotkeyLock", api.query.subtensorModule?.decayingHotkeyLock],
     ["SubtensorModule.DecayingLock", api.query.subtensorModule?.decayingLock],
+    ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
+    ["SubtensorModule.Owner", api.query.subtensorModule?.owner],
     ["SubtensorModule.UnlockRate", api.query.subtensorModule?.unlockRate],
     ["SubtensorModule.MaturityRate", api.query.subtensorModule?.maturityRate],
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
@@ -226,26 +257,38 @@ async function findTestSubnet() {
     const transferEnabled = await api.query.subtensorModule.transferToggle(netuid);
     if (!transferEnabled.isTrue) continue;
 
+    const ownerHotkey = (await api.query.subtensorModule.subnetOwnerHotkey(netuid)).toString();
     const hotkeys = (await api.query.subtensorModule.keys.entries(netuid))
       .map(([, hotkey]) => hotkey.toString())
       .filter((hotkey, index, all) => hotkey && all.indexOf(hotkey) === index);
 
-    if (hotkeys.length >= 2) {
-      return { netuid, hotkeys: hotkeys.slice(0, 2) };
+    const movableHotkeys = hotkeys.filter((hotkey) => hotkey !== ownerHotkey);
+    const hotkeyOwners = await Promise.all(
+      movableHotkeys.map(async (hotkey) => ({
+        hotkey,
+        owner: (await api.query.subtensorModule.owner(hotkey)).toString(),
+      }))
+    );
+
+    for (const origin of hotkeyOwners) {
+      const destination = hotkeyOwners.find(({ hotkey, owner }) => hotkey !== origin.hotkey && owner !== origin.owner);
+      if (destination) {
+        return { netuid, ownerHotkey, hotkeys: [origin.hotkey, destination.hotkey] };
+      }
     }
   }
 
-  throw new Error("no initialized transfer-enabled subnet with at least two hotkeys found");
+  throw new Error("no initialized transfer-enabled subnet with an owner hotkey and two differently owned hotkeys found");
 }
 
 function initializedSubnetStorage() {
   return api.query.swap?.palSwapInitialized ?? api.query.swap?.swapV3Initialized;
 }
 
-async function addStake(hotkey, netuid) {
+async function addStake(signer, hotkey, netuid) {
   const result = await submitAndWait(
     api,
-    source,
+    signer,
     api.tx.subtensorModule.addStake(hotkey, netuid, STAKE_AMOUNT),
     `addStake on netuid ${netuid}`
   );
@@ -314,12 +357,12 @@ async function fundDestinationFees() {
   console.log("destination fee balance funded:", topUp.toString());
 }
 
-async function fundSourceAccount() {
-  if (source.address === fundSource.address) {
+async function fundAccount(account, label) {
+  if (account.address === fundSource.address) {
     return;
   }
 
-  const sourceFree = (await api.query.system.account(source.address)).data.free.toBigInt();
+  const sourceFree = (await api.query.system.account(account.address)).data.free.toBigInt();
   if (sourceFree >= SOURCE_FUND_AMOUNT / 2n) {
     return;
   }
@@ -333,10 +376,10 @@ async function fundSourceAccount() {
   await submitAndWait(
     api,
     fundSource,
-    balancesTransfer(source.address, SOURCE_FUND_AMOUNT),
-    `source balance transfer ${fundSource.address} -> ${source.address}`
+    balancesTransfer(account.address, SOURCE_FUND_AMOUNT),
+    `${label} balance transfer ${fundSource.address} -> ${account.address}`
   );
-  console.log("source funded:", SOURCE_FUND_AMOUNT.toString());
+  console.log(`${label} funded:`, SOURCE_FUND_AMOUNT.toString());
 }
 
 function balancesTransfer(dest, amount) {
@@ -351,9 +394,51 @@ function balancesTransfer(dest, amount) {
 
 function decodeLockState(lockState) {
   const lockedMass = structField(lockState, "lockedMass", "locked_mass").toBigInt();
-  const conviction = structField(lockState, "conviction").toString();
+  const convictionValue = structField(lockState, "conviction");
+  const conviction = convictionValue.toString();
+  const convictionBits = decodeConvictionBits(convictionValue);
   const lastUpdate = structField(lockState, "lastUpdate", "last_update").toBigInt();
-  return { lockedMass, conviction, lastUpdate };
+  return { lockedMass, conviction, convictionBits, lastUpdate };
+}
+
+function decodeConvictionBits(value) {
+  if (value.toBigInt) {
+    return value.toBigInt();
+  }
+
+  const json = value.toJSON?.();
+  if (json?.bits !== undefined) {
+    return parseBigIntish(json.bits);
+  }
+
+  const human = value.toHuman?.();
+  if (human?.bits !== undefined) {
+    return parseBigIntish(human.bits);
+  }
+
+  const parsed = JSON.parse(value.toString());
+  return parseBigIntish(parsed.bits);
+}
+
+function parseBigIntish(value) {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return BigInt(value);
+  }
+  if (typeof value === "string") {
+    return BigInt(value.replaceAll(",", ""));
+  }
+  throw new Error(`could not decode conviction bits from ${value}`);
+}
+
+function assertConvictionNonZero(lock, label) {
+  assert.ok(lock.convictionBits > 0n, `${label}: conviction was ${lock.conviction}`);
+}
+
+function assertConvictionZero(lock, label) {
+  assert.equal(lock.convictionBits, 0n, `${label}: conviction was ${lock.conviction}`);
 }
 
 function structField(value, ...names) {
