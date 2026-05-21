@@ -5,6 +5,9 @@ import { ApiPromise, Keyring, WsProvider } from "@polkadot/api";
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const TRANSFER_AMOUNT = 1_000_000_000n;
 const STAKE_AMOUNT = 1_000_000_000n;
+const LIMIT_STAKE_AMOUNT = 1_000_000_000n;
+const MAX_PRICE = 18_446_744_073_709_551_615n;
+const MIN_PRICE = 0n;
 const HALF_PERQUINTILL = 500_000_000_000_000_000n;
 const MIN_BALANCER_WEIGHT = 450_000_000_000_000_000n;
 const MAX_BALANCER_WEIGHT = 550_000_000_000_000_000n;
@@ -33,7 +36,7 @@ try {
   if (await check("balancer storage availability", assertBalancerStorageAvailable, failures)) {
     const balancerSummary = await assertBalancerWeights();
     const epochSummary = await assertEpochUpdatesReserves(balancerSummary.sampleNetuid);
-    await assertStakingWorks(epochSummary.netuid);
+    await assertStakingSuiteWorks(epochSummary.netuid);
   }
 
   assert.equal(failures.length, 0, `balancer operation test failed:\n${failures.join("\n")}`);
@@ -60,8 +63,12 @@ function assertBalancerStorageAvailable() {
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
     ["SubtensorModule.addStake", api.tx.subtensorModule?.addStake],
+    ["SubtensorModule.addStakeLimit", api.tx.subtensorModule?.addStakeLimit],
+    ["SubtensorModule.removeStakeLimit", api.tx.subtensorModule?.removeStakeLimit],
+    ["SubtensorModule.transferStake", api.tx.subtensorModule?.transferStake],
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
     ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
+    ["SubtensorModule.TransferToggle", api.query.subtensorModule?.transferToggle],
   ].filter(([, query]) => !query);
 
   assert.equal(
@@ -165,7 +172,7 @@ async function assertEpochUpdatesReserves(preferredNetuid) {
   throw new Error(`no SubnetTAO/SubnetAlphaIn reserve changed within ${MAX_BLOCKS_TO_WAIT} finalized blocks`);
 }
 
-async function assertStakingWorks(netuid) {
+async function assertStakingSuiteWorks(netuid) {
   const hotkey = await findExistingHotkey(netuid);
   const senderBefore = (await api.query.system.account(transferSource.address)).data.free.toBigInt();
   assert.ok(
@@ -183,9 +190,96 @@ async function assertStakingWorks(netuid) {
   const alphaAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
 
   assert.ok(alphaAfter > alphaBefore, `staking did not increase TotalHotkeyAlpha for netuid ${netuid}`);
-  assertStakeAddedEvent(result.events, hotkey, netuid);
+  let ownedAlpha = assertStakeAddedEvent(result.events, hotkey, netuid);
   console.log(
     `stake added on epoch-updated netuid ${netuid}: hotkey=${hotkey}, alpha ${alphaBefore}->${alphaAfter}`
+  );
+
+  await assertBalancerWeightInRange(netuid, "after addStake on epoch-updated subnet");
+  await waitForFinalizedBlock();
+  ownedAlpha += await assertAddStakeLimitWorks(hotkey, netuid);
+  await waitForFinalizedBlock();
+  ownedAlpha -= await assertRemoveStakeLimitWorks(hotkey, netuid, ownedAlpha);
+  await waitForFinalizedBlock();
+  await assertCrossNetuidStakeTransferWorks(hotkey, netuid, ownedAlpha);
+}
+
+async function assertBalancerWeightInRange(netuid, label) {
+  const weight = extractQuotePerquintill(await api.query.swap.swapBalancer(netuid));
+  assert.ok(weight !== null, `netuid ${netuid} balancer weight could not be decoded ${label}`);
+  assert.ok(
+    weight >= MIN_BALANCER_WEIGHT && weight <= MAX_BALANCER_WEIGHT,
+    `netuid ${netuid} balancer weight ${weight} is outside 0.45-0.55 ${label}`
+  );
+  console.log(`balancer weight ${label}: netuid ${netuid}=${formatPerquintill(weight)}`);
+}
+
+async function assertAddStakeLimitWorks(hotkey, netuid) {
+  const alphaBefore = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+  const result = await submitAndWait(
+    api,
+    transferSource,
+    api.tx.subtensorModule.addStakeLimit(hotkey, netuid, LIMIT_STAKE_AMOUNT, MAX_PRICE, false),
+    `add stake limit on netuid ${netuid}`
+  );
+  const alphaAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+
+  assert.ok(alphaAfter > alphaBefore, `addStakeLimit did not increase TotalHotkeyAlpha for netuid ${netuid}`);
+  const alphaAdded = assertStakeAddedEvent(result.events, hotkey, netuid);
+  console.log(`addStakeLimit increased alpha on netuid ${netuid}: ${alphaBefore}->${alphaAfter}`);
+  return alphaAdded;
+}
+
+async function assertRemoveStakeLimitWorks(hotkey, netuid, ownedAlpha) {
+  const alphaBefore = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+  const amount = ownedAlpha / 4n;
+  assert.ok(amount > 0n, `not enough alpha on netuid ${netuid} to test removeStakeLimit`);
+
+  const result = await submitAndWait(
+    api,
+    transferSource,
+    api.tx.subtensorModule.removeStakeLimit(hotkey, netuid, amount, MIN_PRICE, false),
+    `remove stake limit on netuid ${netuid}`
+  );
+  const alphaAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+
+  assert.ok(alphaAfter < alphaBefore, `removeStakeLimit did not reduce TotalHotkeyAlpha for netuid ${netuid}`);
+  const alphaRemoved = assertStakeRemovedEvent(result.events, hotkey, netuid);
+  console.log(`removeStakeLimit reduced alpha on netuid ${netuid}: ${alphaBefore}->${alphaAfter}`);
+  return alphaRemoved;
+}
+
+async function assertCrossNetuidStakeTransferWorks(hotkey, originNetuid, ownedAlpha) {
+  const destinationNetuid = await findTransferDestinationNetuid(originNetuid);
+  const originBefore = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, originNetuid)).toBigInt();
+  const destinationBefore = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, destinationNetuid)).toBigInt();
+  const amount = ownedAlpha / 3n;
+  assert.ok(amount > 0n, `not enough alpha on netuid ${originNetuid} to test cross-netuid transferStake`);
+
+  const result = await submitAndWait(
+    api,
+    transferSource,
+    api.tx.subtensorModule.transferStake(
+      transferDest.address,
+      hotkey,
+      originNetuid,
+      destinationNetuid,
+      amount
+    ),
+    `cross-netuid transfer stake ${originNetuid}->${destinationNetuid}`
+  );
+
+  const originAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, originNetuid)).toBigInt();
+  const destinationAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, destinationNetuid)).toBigInt();
+
+  assert.ok(originAfter < originBefore, `transferStake did not reduce origin alpha on netuid ${originNetuid}`);
+  assert.ok(
+    destinationAfter > destinationBefore,
+    `transferStake did not increase destination alpha on netuid ${destinationNetuid}`
+  );
+  assertStakeTransferredEvent(result.events, hotkey, originNetuid, destinationNetuid);
+  console.log(
+    `transferStake moved stake ${originNetuid}->${destinationNetuid}: origin ${originBefore}->${originAfter}, destination ${destinationBefore}->${destinationAfter}`
   );
 }
 
@@ -213,6 +307,62 @@ function assertStakeAddedEvent(events, hotkey, netuid) {
   });
 
   assert.ok(event, `StakeAdded event not found for hotkey ${hotkey} on netuid ${netuid}`);
+  return event.event.data[3].toBigInt();
+}
+
+function assertStakeRemovedEvent(events, hotkey, netuid) {
+  const event = events.find(({ event }) => {
+    if (event.section !== "subtensorModule" || event.method !== "StakeRemoved") {
+      return false;
+    }
+
+    const [, eventHotkey, , alphaUnstaked, eventNetuid] = event.data;
+    return (
+      eventHotkey.toString() === hotkey &&
+      eventNetuid.toNumber() === netuid &&
+      alphaUnstaked.toBigInt() > 0n
+    );
+  });
+
+  assert.ok(event, `StakeRemoved event not found for hotkey ${hotkey} on netuid ${netuid}`);
+  return event.event.data[3].toBigInt();
+}
+
+function assertStakeTransferredEvent(events, hotkey, originNetuid, destinationNetuid) {
+  const event = events.find(({ event }) => {
+    if (event.section !== "subtensorModule" || event.method !== "StakeTransferred") {
+      return false;
+    }
+
+    const [, , eventHotkey, eventOriginNetuid, eventDestinationNetuid, taoMoved] = event.data;
+    return (
+      eventHotkey.toString() === hotkey &&
+      eventOriginNetuid.toNumber() === originNetuid &&
+      eventDestinationNetuid.toNumber() === destinationNetuid &&
+      taoMoved.toBigInt() > 0n
+    );
+  });
+
+  assert.ok(
+    event,
+    `StakeTransferred event not found for hotkey ${hotkey} from netuid ${originNetuid} to ${destinationNetuid}`
+  );
+}
+
+async function findTransferDestinationNetuid(originNetuid) {
+  const originTransferEnabled = await api.query.subtensorModule.transferToggle(originNetuid);
+  assert.ok(originTransferEnabled.isTrue, `transferStake is disabled for origin netuid ${originNetuid}`);
+
+  const snapshots = await reserveSnapshots();
+  for (const { netuid } of snapshots) {
+    if (netuid === originNetuid) continue;
+    const transferEnabled = await api.query.subtensorModule.transferToggle(netuid);
+    if (transferEnabled.isTrue) {
+      return netuid;
+    }
+  }
+
+  throw new Error(`no initialized transfer-enabled destination netuid found for origin netuid ${originNetuid}`);
 }
 
 async function reserveSnapshots() {
