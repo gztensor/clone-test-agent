@@ -21,7 +21,7 @@ The current focused regression test is `js-tests/tests/test-balancer-operation.j
 
 ### Manual Build Process
 
-This repository expects a sibling Subtensor checkout for the node binary, plus the read-only `subtensor-reference/` tree in this workspace for runtime reference and wasm upgrades:
+This repository expects a Subtensor checkout in `../../subtensor`, plus the read-only symlink `subtensor-reference/` tree in this workspace for runtime reference and wasm upgrades, for example:
 
 ```text
 development/
@@ -29,19 +29,11 @@ development/
   agents/codex-tester/
 ```
 
-Build the node binary manually in the sibling `subtensor/` checkout:
+Build the node binary manually in the `subtensor/` checkout:
 
 ```sh
 cd ../../subtensor
-cargo build --release
-```
-
-Build the runtime wasm used for upgrades in `subtensor-reference/`:
-
-```sh
-cd /path/to/agents/codex-tester
-cd subtensor-reference
-cargo build --release -p node-subtensor-runtime
+cargo build --release --workspace --all-targets
 ```
 
 The runtime upgrade script expects this file:
@@ -50,66 +42,16 @@ The runtime upgrade script expects this file:
 subtensor-reference/target/release/wbuild/node-subtensor-runtime/node_subtensor_runtime.compact.compressed.wasm
 ```
 
-Install JS dependencies:
-
-```sh
-cd js-tests
-npm install
-```
-
-Create or reuse the local clone chainspec:
-
-```sh
-./scripts/clone-mainnet.sh
-```
-
-Start the local clone in another terminal:
-
-```sh
-./scripts/start-local-clone.sh
-```
-
-The node may take 90-120 seconds or more before `ws://127.0.0.1:9944` responds.
-
-Run the smoke test:
-
-```sh
-cd js-tests
-npm test
-```
-
-Upgrade the local clone to the current reference runtime:
-
-```sh
-npm run runtime:update:alice
-```
-
-Run the balancer operation test:
-
-```sh
-npm run test:balancer-operation
-```
-
-Stop the local clone when finished:
-
-```sh
-./scripts/stop-local-clone.sh
-```
-
 ### Prompt Examples
 
 Use prompts like these with Codex:
 
 ```text
-Re-read AGENTS.md and write a JS test that verifies balance transfers after a runtime upgrade.
+Write a JS test that verifies balance transfers after a runtime upgrade.
 ```
 
 ```text
-Re-read AGENTS.md and write a test that verifies balancer initialization, non-default balancer weights, balance transfers, and reserve updates after an epoch.
-```
-
-```text
-Run the local clone workflow, upgrade to the runtime in subtensor-reference, execute the balancer operation test, then stop the node.
+Write a test that verifies balancer initialization, non-default balancer weights, balance transfers, and reserve updates after an epoch.
 ```
 
 ```text
@@ -120,5 +62,4 @@ Inspect the failed JS test output and node logs, explain the likely runtime issu
 
 - `subtensor-reference/` is read-only reference material for tests.
 - Local clone data and chainspec files live outside this repo under `../../clones`.
-- Do not leave a local node running after a test session.
 - Keep new JS tests focused and descriptive; avoid broad refactors during runtime investigations.
