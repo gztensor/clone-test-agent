@@ -4,6 +4,7 @@ import { ApiPromise, Keyring, WsProvider } from "@polkadot/api";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const TRANSFER_AMOUNT = 1_000_000_000n;
+const STAKE_AMOUNT = 1_000_000_000n;
 const HALF_PERQUINTILL = 500_000_000_000_000_000n;
 const MIN_BALANCER_WEIGHT = 450_000_000_000_000_000n;
 const MAX_BALANCER_WEIGHT = 550_000_000_000_000_000n;
@@ -31,7 +32,8 @@ try {
 
   if (await check("balancer storage availability", assertBalancerStorageAvailable, failures)) {
     const balancerSummary = await assertBalancerWeights();
-    await assertEpochUpdatesReserves(balancerSummary.sampleNetuid);
+    const epochSummary = await assertEpochUpdatesReserves(balancerSummary.sampleNetuid);
+    await assertStakingWorks(epochSummary.netuid);
   }
 
   assert.equal(failures.length, 0, `balancer operation test failed:\n${failures.join("\n")}`);
@@ -57,6 +59,9 @@ function assertBalancerStorageAvailable() {
     ["Swap.PalSwapInitialized", api.query.swap?.palSwapInitialized],
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
+    ["SubtensorModule.addStake", api.tx.subtensorModule?.addStake],
+    ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
+    ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
   ].filter(([, query]) => !query);
 
   assert.equal(
@@ -149,7 +154,7 @@ async function assertEpochUpdatesReserves(preferredNetuid) {
       console.log(
         `reserve changed netuid ${changed.netuid}: tao ${previous.tao}->${changed.tao}, alpha ${previous.alpha}->${changed.alpha}`
       );
-      return;
+      return { netuid: changed.netuid };
     }
 
     if (blocks % 30 === 0) {
@@ -158,6 +163,56 @@ async function assertEpochUpdatesReserves(preferredNetuid) {
   }
 
   throw new Error(`no SubnetTAO/SubnetAlphaIn reserve changed within ${MAX_BLOCKS_TO_WAIT} finalized blocks`);
+}
+
+async function assertStakingWorks(netuid) {
+  const hotkey = await findExistingHotkey(netuid);
+  const senderBefore = (await api.query.system.account(transferSource.address)).data.free.toBigInt();
+  assert.ok(
+    senderBefore > STAKE_AMOUNT,
+    `staking source ${transferSource.address} has ${senderBefore}, cannot stake ${STAKE_AMOUNT}`
+  );
+
+  const alphaBefore = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+  const result = await submitAndWait(
+    api,
+    transferSource,
+    api.tx.subtensorModule.addStake(hotkey, netuid, STAKE_AMOUNT),
+    `add stake on netuid ${netuid}`
+  );
+  const alphaAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+
+  assert.ok(alphaAfter > alphaBefore, `staking did not increase TotalHotkeyAlpha for netuid ${netuid}`);
+  assertStakeAddedEvent(result.events, hotkey, netuid);
+  console.log(
+    `stake added on epoch-updated netuid ${netuid}: hotkey=${hotkey}, alpha ${alphaBefore}->${alphaAfter}`
+  );
+}
+
+async function findExistingHotkey(netuid) {
+  const keyEntries = await api.query.subtensorModule.keys.entries(netuid);
+  assert.ok(keyEntries.length > 0, `netuid ${netuid} has no registered hotkeys in Keys storage`);
+
+  const hotkey = keyEntries[0][1].toString();
+  assert.notEqual(hotkey, "", `netuid ${netuid} first hotkey decoded to an empty address`);
+  return hotkey;
+}
+
+function assertStakeAddedEvent(events, hotkey, netuid) {
+  const event = events.find(({ event }) => {
+    if (event.section !== "subtensorModule" || event.method !== "StakeAdded") {
+      return false;
+    }
+
+    const [, eventHotkey, , alphaStaked, eventNetuid] = event.data;
+    return (
+      eventHotkey.toString() === hotkey &&
+      eventNetuid.toNumber() === netuid &&
+      alphaStaked.toBigInt() > 0n
+    );
+  });
+
+  assert.ok(event, `StakeAdded event not found for hotkey ${hotkey} on netuid ${netuid}`);
 }
 
 async function reserveSnapshots() {
@@ -223,7 +278,7 @@ async function submitAndWait(api, signer, tx, label) {
       }
 
       if (status.isFinalized) {
-        finish(resolve, status.asFinalized.toString());
+        finish(resolve, { blockHash: status.asFinalized.toString(), events });
       }
     })
       .then((unsub) => {
