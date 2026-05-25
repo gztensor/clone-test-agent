@@ -15,6 +15,10 @@ const TRANSFER_SOURCE_URI = process.env.TRANSFER_SOURCE_URI ?? `//LockConviction
 const TRANSFER_DEST_URI = process.env.TRANSFER_DEST_URI ?? `//LockConvictionTest//${RUN_ID}//destination`;
 const OWNER_HOTKEY_SOURCE_URI =
   process.env.OWNER_HOTKEY_SOURCE_URI ?? `//LockConvictionTest//${RUN_ID}//owner-hotkey-source`;
+const OWNER_STAKE_SOURCE_URI =
+  process.env.OWNER_STAKE_SOURCE_URI ?? `//LockConvictionTest//${RUN_ID}//owner-stake-source`;
+const OWNER_TRANSFER_DEST_URI =
+  process.env.OWNER_TRANSFER_DEST_URI ?? `//LockConvictionTest//${RUN_ID}//owner-transfer-destination`;
 const BLOCKS_BETWEEN_LOCK_ACTIONS = Number(process.env.LOCK_TEST_WAIT_BLOCKS ?? 3);
 
 const keyring = new Keyring({ type: "sr25519" });
@@ -22,10 +26,14 @@ const fundSource = keyring.addFromUri(FUND_SOURCE_URI);
 const source = keyring.addFromUri(TRANSFER_SOURCE_URI);
 const destination = keyring.addFromUri(TRANSFER_DEST_URI);
 const ownerHotkeySource = keyring.addFromUri(OWNER_HOTKEY_SOURCE_URI);
+const ownerStakeSource = keyring.addFromUri(OWNER_STAKE_SOURCE_URI);
+const ownerTransferDestination = keyring.addFromUri(OWNER_TRANSFER_DEST_URI);
 const logger = createTempLogger("test-locks-conviction.log");
 logger.captureConsole();
 
 let api;
+let ownerToRestore = null;
+let ownerRestoreNetuid = null;
 
 async function main() {
   await logger.start();
@@ -50,13 +58,34 @@ async function main() {
   console.log("source coldkey:", source.address);
   console.log("destination coldkey:", destination.address);
   console.log("owner-hotkey source coldkey:", ownerHotkeySource.address);
+  console.log("test subnet owner coldkey:", ownerStakeSource.address);
+  console.log("owner transfer destination coldkey:", ownerTransferDestination.address);
   console.log("test subnet:", netuid);
   console.log("subnet owner hotkey:", ownerHotkey);
   console.log("origin hotkey:", originHotkey);
   console.log("move-lock destination hotkey:", destinationHotkey);
 
-  await fundAccount(source, "source");
-  await fundAccount(ownerHotkeySource, "owner-hotkey source");
+  const accountsToFund = [
+    [source, "source"],
+    [destination, "destination"],
+    [ownerHotkeySource, "owner-hotkey source"],
+    [ownerStakeSource, "owner stake source"],
+    [ownerTransferDestination, "owner transfer destination"],
+  ];
+
+  const originalSubnetOwner = (await api.query.subtensorModule.subnetOwner(netuid)).toString();
+  ownerToRestore = originalSubnetOwner;
+  ownerRestoreNetuid = netuid;
+  const initialOwnerCutAutoLock = await api.query.subtensorModule.ownerCutAutoLockEnabled(netuid);
+  if (initialOwnerCutAutoLock.isTrue) {
+    console.log("owner cut auto-lock default: true");
+  } else {
+    console.log("owner cut auto-lock already false before setup; continuing with opt-out assertion");
+  }
+  await prepareTestState(accountsToFund, netuid, ownerStakeSource.address, false);
+  const disabledOwnerCutAutoLock = await api.query.subtensorModule.ownerCutAutoLockEnabled(netuid);
+  assert.equal(disabledOwnerCutAutoLock.isFalse, true, "owner cut auto-lock should be disabled after opt-out");
+  console.log("owner cut auto-lock default and opt-out: ok");
 
   const ownerHotkeyAlphaAdded = await addStake(ownerHotkeySource, ownerHotkey, netuid);
   const ownerHotkeyLockAmount = ownerHotkeyAlphaAdded / 2n;
@@ -78,14 +107,15 @@ async function main() {
     ownerHotkeyLockAmount,
     "non-owner coldkey lock to subnet owner hotkey should receive immediate owner conviction"
   );
-  const ownerAggregate = await requireAggregateLock("ownerLock", netuid, ownerHotkey, "perpetual owner aggregate lock");
+  const ownerAggregate = await requireAggregateLock("decayingOwnerLock", netuid, ownerHotkey, "default decaying owner aggregate lock");
   assertConvictionAtLeast(
     ownerAggregate,
     ownerHotkeyLockAmount,
-    "OwnerLock should include immediate owner conviction"
+    "DecayingOwnerLock should include immediate owner conviction"
   );
   await assertNoAggregateLock("hotkeyLock", netuid, ownerHotkey, "owner-hotkey lock should not use general HotkeyLock");
-  console.log("perpetual owner aggregate lock:", formatLock(ownerAggregate));
+  await assertNoAggregateLock("decayingHotkeyLock", netuid, ownerHotkey, "owner-hotkey lock should not use general DecayingHotkeyLock");
+  console.log("default decaying owner aggregate lock:", formatLock(ownerAggregate));
   console.log("passive owner-hotkey immediate conviction:", formatLock(ownerHotkeyLock));
 
   await submitAndWait(
@@ -94,7 +124,7 @@ async function main() {
     api.tx.subtensorModule.setPerpetualLock(netuid, false),
     "setPerpetualLock false for owner-hotkey lock"
   );
-  await requireDecayingFlag(ownerHotkeySource.address, netuid);
+  await assertNoDecayingFlag(ownerHotkeySource.address, netuid);
   const decayingOwnerAggregate = await requireAggregateLock(
     "decayingOwnerLock",
     netuid,
@@ -109,6 +139,121 @@ async function main() {
   await assertNoAggregateLock("decayingHotkeyLock", netuid, ownerHotkey, "owner-hotkey lock should not use general DecayingHotkeyLock");
   console.log("decaying owner aggregate lock:", formatLock(decayingOwnerAggregate));
 
+  await submitAndWait(
+    api,
+    ownerHotkeySource,
+    api.tx.subtensorModule.moveLock(destinationHotkey, netuid),
+    "move owner-hotkey lock to non-owner hotkey"
+  );
+  await assertNoLock(ownerHotkeySource.address, netuid, ownerHotkey, "owner-hotkey moved lock should leave owner hotkey");
+  const movedFromOwner = await requireLock(
+    ownerHotkeySource.address,
+    netuid,
+    destinationHotkey,
+    "owner-hotkey lock moved to non-owner hotkey"
+  );
+  assertConvictionZero(movedFromOwner, "moveLock from owner hotkey to non-owner hotkey should reset conviction");
+  await waitForFinalizedBlocks(BLOCKS_BETWEEN_LOCK_ACTIONS);
+  const movedFromOwnerTopUp = ownerHotkeyLockAmount / 10n;
+  await lockStake(
+    ownerHotkeySource,
+    destinationHotkey,
+    netuid,
+    movedFromOwnerTopUp,
+    "top-up moved owner-hotkey lock"
+  );
+  const movedFromOwnerAfterTopUp = await requireLock(
+    ownerHotkeySource.address,
+    netuid,
+    destinationHotkey,
+    "moved owner-hotkey lock after top-up"
+  );
+  assertConvictionNonZero(
+    movedFromOwnerAfterTopUp,
+    "moved owner-hotkey lock should start accumulating non-owner conviction"
+  );
+  assertConvictionLessThanWhole(
+    movedFromOwnerAfterTopUp,
+    movedFromOwnerAfterTopUp.lockedMass,
+    "moved owner-hotkey lock should accumulate gradually after leaving owner hotkey"
+  );
+  console.log("moved owner-hotkey lock after gradual accumulation:", formatLock(movedFromOwnerAfterTopUp));
+
+  const ownerAlphaAdded = await addStake(ownerStakeSource, ownerHotkey, netuid);
+  const ownerLockAmount = ownerAlphaAdded / 2n;
+  await lockStake(
+    ownerStakeSource,
+    ownerHotkey,
+    netuid,
+    ownerLockAmount,
+    "subnet-owner coldkey lockStake to owner hotkey"
+  );
+  const ownerColdkeyLock = await requireLock(
+    ownerStakeSource.address,
+    netuid,
+    ownerHotkey,
+    "subnet-owner coldkey owner-hotkey lock"
+  );
+  assertConvictionAtLeast(
+    ownerColdkeyLock,
+    ownerColdkeyLock.lockedMass,
+    "subnet-owner coldkey lock to subnet owner hotkey should receive immediate owner conviction"
+  );
+  console.log("subnet-owner coldkey immediate owner conviction:", formatLock(ownerColdkeyLock));
+
+  await submitAndWait(
+    api,
+    ownerTransferDestination,
+    api.tx.subtensorModule.setPerpetualLock(netuid, true),
+    "setPerpetualLock true for owner transfer destination"
+  );
+  await requireDecayingFlag(ownerTransferDestination.address, netuid);
+
+  const ownerTransferBefore = await requireLock(
+    ownerStakeSource.address,
+    netuid,
+    ownerHotkey,
+    "owner coldkey pre-transfer lock"
+  );
+  const ownerUnlockedAlpha = ownerAlphaAdded - ownerTransferBefore.lockedMass;
+  const ownerSameSubnetTransferAmount = ownerUnlockedAlpha + ownerTransferBefore.lockedMass / 2n;
+  await submitAndWait(
+    api,
+    ownerStakeSource,
+    api.tx.subtensorModule.transferStake(
+      ownerTransferDestination.address,
+      ownerHotkey,
+      netuid,
+      netuid,
+      ownerSameSubnetTransferAmount
+    ),
+    "owner-coldkey same-subnet transferStake"
+  );
+  const ownerSourceAfterTransfer = await requireLock(
+    ownerStakeSource.address,
+    netuid,
+    ownerHotkey,
+    "owner coldkey post-transfer lock"
+  );
+  const ownerDestinationAfterTransfer = await requireLock(
+    ownerTransferDestination.address,
+    netuid,
+    ownerHotkey,
+    "owner-coldkey transferred lock"
+  );
+  assertProportionalConvictionSplit(
+    ownerSourceAfterTransfer,
+    ownerDestinationAfterTransfer,
+    "owner-coldkey transferStake should split conviction proportionally"
+  );
+  assertConvictionAtLeast(
+    ownerDestinationAfterTransfer,
+    ownerDestinationAfterTransfer.lockedMass,
+    "owner-coldkey transferred lock to owner hotkey should keep immediate owner conviction"
+  );
+  console.log("owner source lock after same-subnet transfer:", formatLock(ownerSourceAfterTransfer));
+  console.log("owner destination lock after same-subnet transfer:", formatLock(ownerDestinationAfterTransfer));
+
   const alphaAdded = await addStake(source, originHotkey, netuid);
   assert.ok(alphaAdded > 4n, "addStake returned too little alpha to exercise lock transfer");
   console.log("alpha added:", alphaAdded.toString());
@@ -117,7 +262,7 @@ async function main() {
   await lockStake(source, originHotkey, netuid, initialLockAmount, "initial lockStake");
   let sourceLock = await requireLock(source.address, netuid, originHotkey, "source initial lock");
   assert.equal(sourceLock.lockedMass, initialLockAmount, "initial Lock.lockedMass did not match locked amount");
-  await requireAggregateLock("hotkeyLock", netuid, originHotkey, "perpetual general aggregate lock");
+  await requireAggregateLock("decayingHotkeyLock", netuid, originHotkey, "default decaying general aggregate lock");
   await assertNoLock(destination.address, netuid, originHotkey, "destination should start without this lock");
   console.log("initial lock:", formatLock(sourceLock));
 
@@ -143,9 +288,17 @@ async function main() {
     api.tx.subtensorModule.setPerpetualLock(netuid, false),
     "setPerpetualLock false"
   );
-  await requireDecayingFlag(source.address, netuid);
+  await assertNoDecayingFlag(source.address, netuid);
   await requireAggregateLock("decayingHotkeyLock", netuid, originHotkey, "decaying general aggregate lock");
   console.log("setPerpetualLock(false): ok");
+
+  await submitAndWait(
+    api,
+    destination,
+    api.tx.subtensorModule.setPerpetualLock(netuid, true),
+    "setPerpetualLock true for transfer destination"
+  );
+  await requireDecayingFlag(destination.address, netuid);
 
   await waitForFinalizedBlocks(BLOCKS_BETWEEN_LOCK_ACTIONS);
   const topUpAmount = initialLockAmount / 4n;
@@ -193,6 +346,25 @@ async function main() {
   );
   assert.ok(destinationAfterTransfer.lockedMass > 0n, "same-subnet transfer did not move locked mass");
   assertConvictionNonZero(destinationAfterTransfer, "destination transferred lock should have conviction before moveLock");
+  assertProportionalConvictionSplit(
+    sourceAfterTransfer,
+    destinationAfterTransfer,
+    "non-owner transferStake should split conviction proportionally"
+  );
+  await assertAggregateMatchesLock(
+    "decayingHotkeyLock",
+    sourceAfterTransfer,
+    netuid,
+    originHotkey,
+    "decaying source aggregate after transfer"
+  );
+  await assertAggregateMatchesLock(
+    "hotkeyLock",
+    destinationAfterTransfer,
+    netuid,
+    originHotkey,
+    "perpetual destination aggregate after transfer"
+  );
   console.log("source lock after same-subnet transfer:", formatLock(sourceAfterTransfer));
   console.log("destination lock after same-subnet transfer:", formatLock(destinationAfterTransfer));
 
@@ -216,13 +388,19 @@ async function main() {
     api.tx.subtensorModule.setPerpetualLock(netuid, true),
     "setPerpetualLock true"
   );
-  await assertNoDecayingFlag(destination.address, netuid);
+  await requireDecayingFlag(destination.address, netuid);
   await requireAggregateLock("hotkeyLock", netuid, destinationHotkey, "moved perpetual aggregate lock");
   console.log("setPerpetualLock(true): ok");
 
   console.log("locks and conviction live-clone test: ok");
   console.log("not tested on this clone: owner reassignment is disabled in current coinbase code.");
   } finally {
+    if (ownerToRestore !== null && ownerRestoreNetuid !== null) {
+      await setSubnetOwnerForTest(ownerRestoreNetuid, ownerToRestore);
+      console.log("subnet owner restored:", ownerToRestore);
+      ownerToRestore = null;
+      ownerRestoreNetuid = null;
+    }
     await api.disconnect();
   }
 }
@@ -237,8 +415,58 @@ main().then(() => logger.flush()).catch(async (error) => {
   process.exit(1);
 });
 
+async function setSubnetOwnerForTest(netuid, ownerAddress) {
+  const key = api.query.subtensorModule.subnetOwner.key(netuid);
+  const value = api.createType("AccountId", ownerAddress).toHex();
+  await submitAndWait(
+    api,
+    fundSource,
+    api.tx.sudo.sudo(api.tx.system.setStorage([[key, value]])),
+    `sudo set SubnetOwner(${netuid})`
+  );
+  const stored = (await api.query.subtensorModule.subnetOwner(netuid)).toString();
+  assert.equal(stored, ownerAddress, `SubnetOwner(${netuid}) was not updated`);
+  console.log(`SubnetOwner(${netuid}) set for test:`, ownerAddress);
+}
+
+async function prepareTestState(accountsWithLabels, netuid, ownerAddress, autoLockEnabled) {
+  const accountsToFund = accountsWithLabels.filter(([account]) => account.address !== fundSource.address);
+  const calls = accountsToFund.map(([account]) =>
+    api.tx.balances.forceSetBalance(account.address, SOURCE_FUND_AMOUNT)
+  );
+  const ownerKey = api.query.subtensorModule.subnetOwner.key(netuid);
+  const ownerValue = api.createType("AccountId", ownerAddress).toHex();
+  const autoLockKey = api.query.subtensorModule.ownerCutAutoLockEnabled.key(netuid);
+  const autoLockValue = autoLockEnabled ? "0x01" : "0x00";
+  calls.push(api.tx.system.setStorage([
+    [ownerKey, ownerValue],
+    [autoLockKey, autoLockValue],
+  ]));
+  const batched = api.tx.utility?.batchAll ? api.tx.utility.batchAll(calls) : api.tx.utility.batch(calls);
+  await submitAndWait(
+    api,
+    fundSource,
+    api.tx.sudo.sudo(batched),
+    "sudo prepare lock conviction test state"
+  );
+
+  for (const [account, label] of accountsToFund) {
+    const free = (await api.query.system.account(account.address)).data.free.toBigInt();
+    assert.ok(free >= SOURCE_FUND_AMOUNT, `${label} funding failed: free=${free}`);
+    console.log(`${label} funded:`, free.toString());
+  }
+  const storedOwner = (await api.query.subtensorModule.subnetOwner(netuid)).toString();
+  assert.equal(storedOwner, ownerAddress, `SubnetOwner(${netuid}) was not updated`);
+  console.log(`SubnetOwner(${netuid}) set for test:`, ownerAddress);
+  console.log(`OwnerCutAutoLockEnabled(${netuid}) set for test:`, autoLockEnabled);
+}
+
 function assertLockMetadataAvailable() {
   const missing = [
+    ["Sudo.sudo", api.tx.sudo?.sudo],
+    ["System.setStorage", api.tx.system?.setStorage],
+    ["Utility.batch", api.tx.utility?.batch],
+    ["Balances.forceSetBalance", api.tx.balances?.forceSetBalance],
     ["SubtensorModule.lockStake", api.tx.subtensorModule?.lockStake],
     ["SubtensorModule.moveLock", api.tx.subtensorModule?.moveLock],
     ["SubtensorModule.setPerpetualLock", api.tx.subtensorModule?.setPerpetualLock],
@@ -253,6 +481,8 @@ function assertLockMetadataAvailable() {
     ["SubtensorModule.DecayingLock", api.query.subtensorModule?.decayingLock],
     ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.Owner", api.query.subtensorModule?.owner],
+    ["SubtensorModule.SubnetOwner", api.query.subtensorModule?.subnetOwner],
+    ["SubtensorModule.OwnerCutAutoLockEnabled", api.query.subtensorModule?.ownerCutAutoLockEnabled],
     ["SubtensorModule.UnlockRate", api.query.subtensorModule?.unlockRate],
     ["SubtensorModule.MaturityRate", api.query.subtensorModule?.maturityRate],
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
@@ -318,6 +548,7 @@ function initializedSubnetStorage() {
 }
 
 async function addStake(signer, hotkey, netuid) {
+  console.log(`submitting addStake: signer=${signer.address} hotkey=${hotkey} netuid=${netuid}`);
   const result = await submitAndWait(
     api,
     signer,
@@ -366,6 +597,18 @@ async function assertNoAggregateLock(storageName, netuid, hotkey, label) {
   assert.ok(maybeLock.isNone, `${label}: unexpected ${aggregateLabel(storageName, netuid, hotkey)} exists`);
 }
 
+async function assertAggregateMatchesLock(storageName, lock, netuid, hotkey, label) {
+  const aggregate = await requireAggregateLock(storageName, netuid, hotkey, label);
+  assert.ok(
+    aggregate.lockedMass >= lock.lockedMass,
+    `${label}: aggregate locked mass ${aggregate.lockedMass} is less than lock ${lock.lockedMass}`
+  );
+  assert.ok(
+    aggregate.convictionBits >= lock.convictionBits,
+    `${label}: aggregate conviction ${aggregate.convictionBits} is less than lock ${lock.convictionBits}`
+  );
+}
+
 function queryAggregateLock(storageName, netuid, hotkey) {
   if (storageName === "ownerLock" || storageName === "decayingOwnerLock") {
     return api.query.subtensorModule[storageName](netuid);
@@ -393,19 +636,39 @@ async function assertNoDecayingFlag(coldkey, netuid) {
 
 async function fundDestinationFees() {
   const minimumFree = 100_000_000n;
-  const topUp = 1_000_000_000n;
   const destinationFree = (await api.query.system.account(destination.address)).data.free.toBigInt();
   if (destinationFree >= minimumFree) {
     return;
   }
 
+  await setFreeBalance(destination.address, SOURCE_FUND_AMOUNT, "destination fee balance");
+}
+
+async function fundAccounts(accountsWithLabels) {
+  const accountsToFund = accountsWithLabels.filter(([account]) => account.address !== fundSource.address);
+  if (accountsToFund.length === 0) {
+    return;
+  }
+
+  const calls = accountsToFund.map(([account]) => api.tx.balances.forceSetBalance(account.address, SOURCE_FUND_AMOUNT));
+  const batched = api.tx.utility?.batchAll ? api.tx.utility.batchAll(calls) : api.tx.utility.batch(calls);
+  await submitAndWait(api, fundSource, api.tx.sudo.sudo(batched), "sudo batch fund test accounts");
+
+  for (const [account, label] of accountsToFund) {
+    const free = (await api.query.system.account(account.address)).data.free.toBigInt();
+    assert.ok(free >= SOURCE_FUND_AMOUNT, `${label} funding failed: free=${free}`);
+    console.log(`${label} funded:`, free.toString());
+  }
+}
+
+async function setFreeBalance(address, amount, label) {
   await submitAndWait(
     api,
-    source,
-    balancesTransfer(destination.address, topUp),
-    `fee balance transfer ${source.address} -> ${destination.address}`
+    fundSource,
+    api.tx.sudo.sudo(api.tx.balances.forceSetBalance(address, amount)),
+    `sudo fund ${label}`
   );
-  console.log("destination fee balance funded:", topUp.toString());
+  console.log(`${label} funded:`, amount.toString());
 }
 
 async function fundAccount(account, label) {
@@ -492,12 +755,47 @@ function assertConvictionAtLeast(lock, wholeConviction, label) {
   );
 }
 
+function assertConvictionLessThanWhole(lock, wholeConviction, label) {
+  const wholeBits = wholeConviction << 64n;
+  assert.ok(
+    lock.convictionBits < wholeBits,
+    `${label}: conviction ${lock.conviction} is not less than ${wholeConviction}`
+  );
+}
+
 function assertConvictionNonZero(lock, label) {
   assert.ok(lock.convictionBits > 0n, `${label}: conviction was ${lock.conviction}`);
 }
 
 function assertConvictionZero(lock, label) {
   assert.equal(lock.convictionBits, 0n, `${label}: conviction was ${lock.conviction}`);
+}
+
+function assertProportionalConvictionSplit(sourceLock, destinationLock, label) {
+  const totalLocked = sourceLock.lockedMass + destinationLock.lockedMass;
+  const totalConviction = sourceLock.convictionBits + destinationLock.convictionBits;
+  assert.ok(totalLocked > 0n, `${label}: total locked mass is zero`);
+  assert.ok(totalConviction > 0n, `${label}: total conviction is zero`);
+
+  const expectedDestinationConviction = totalConviction * destinationLock.lockedMass / totalLocked;
+  assertWithinTolerance(
+    destinationLock.convictionBits,
+    expectedDestinationConviction,
+    convictionTolerance(totalConviction),
+    `${label}: destination conviction is not proportional to moved locked mass`
+  );
+}
+
+function convictionTolerance(value) {
+  return value / 1000000n + (1n << 64n);
+}
+
+function assertWithinTolerance(actual, expected, tolerance, label) {
+  const diff = actual > expected ? actual - expected : expected - actual;
+  assert.ok(
+    diff <= tolerance,
+    `${label}: actual=${actual} expected=${expected} tolerance=${tolerance}`
+  );
 }
 
 function structField(value, ...names) {
@@ -545,12 +843,18 @@ async function expectDispatchError(tx, signer, label, expectedName) {
 
 async function submitAndWait(api, signer, tx, label) {
   return new Promise((resolve, reject) => {
+    console.log(`submitting tx: ${label}`);
     let unsubscribe;
     let settled = false;
+    const timeout = setTimeout(
+      () => finish(reject, new Error(`${label} timed out waiting for finalization`)),
+      Number(process.env.SUBMIT_TIMEOUT_MS ?? 180_000)
+    );
 
     const finish = (fn, value) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       unsubscribe?.();
       fn(value);
     };
