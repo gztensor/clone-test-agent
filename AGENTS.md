@@ -131,3 +131,15 @@ Final verification rule:
 - Keep `js-tests/temp/.gitkeep` tracked and ignore generated files in that folder.
 - When reporting test results, read and summarize the relevant `js-tests/temp/*.log` file.
 - Do not leave important test output only in terminal scrollback.
+
+## Sandbox websocket workaround
+
+- Saved JS files that use `@polkadot/api` against `ws://127.0.0.1:9944` may hang when run inside the Codex sandbox, even though equivalent inline `node --input-type=module -e ...` probes work.
+- When running saved Polkadot JS scripts/tests against the local clone websocket, run them outside the sandbox with escalated permissions.
+- This applies to commands such as:
+  - `node tests/clone-smoke-test.js`
+  - `npm run test`
+  - `npm run runtime:update:alice`
+  - `npm run test:locks-conviction`
+- If a saved JS test stalls at `ApiPromise.create({ provider })` while the node is listening and producing blocks, stop the hanging test process and rerun the saved file outside the sandbox.
+- Do not “fix” this by rewriting the test as inline Node. Final verification must still execute the saved test file.
