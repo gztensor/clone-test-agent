@@ -5,11 +5,13 @@
     "patch:dev-chainspec": "node scripts/patch-dev-chainspec.js",
     "runtime:update:alice": "node scripts/update-runtime-with-alice.js",
     "test:balancer-operation": "node tests/test-balancer-operation.js",
+    "test:total-issuance-trackers": "node tests/test-total-issuance-trackers.js",
     "test:net-tao-flow-emission-allocation": "node tests/test-net-tao-flow-emission-allocation.js",
     "test:locks-conviction": "node tests/test-locks-conviction.js",
     "test:testnet-lock-conviction": "node tests/testnet-lock-conviction-smoke.js"
   },
   "dependencies": {
-    "@polkadot/api": "^16.4.9"
+    "@polkadot/api": "^16.4.9",
+    "ethers": "^6.16.0"
   }
 }
