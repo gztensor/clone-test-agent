@@ -8,7 +8,8 @@
     "test:total-issuance-trackers": "node tests/test-total-issuance-trackers.js",
     "test:net-tao-flow-emission-allocation": "node tests/test-net-tao-flow-emission-allocation.js",
     "test:locks-conviction": "node tests/test-locks-conviction.js",
-    "test:testnet-lock-conviction": "node tests/testnet-lock-conviction-smoke.js"
+    "test:testnet-lock-conviction": "node tests/testnet-lock-conviction-smoke.js",
+    "test:testnet-unlock-rate": "node tests/testnet-unlock-rate-read.js"
   },
   "dependencies": {
     "@polkadot/api": "^16.4.9",
