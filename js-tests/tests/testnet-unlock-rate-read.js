@@ -23,6 +23,7 @@ async function main() {
       "SubtensorModule.UnlockRate storage is unavailable on this endpoint"
     );
 
+    // Meaningless comment for commit plumbing.
     const unlockRate = await api.query.subtensorModule.unlockRate();
     const unlockRateValue = unlockRate.toBigInt();
 
