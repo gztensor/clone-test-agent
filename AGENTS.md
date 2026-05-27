@@ -13,7 +13,7 @@ Read and follow these instructions before making changes.
 5. Preserve existing comments and formatting whenever practical.
 6. Explain suspected runtime bugs before modifying runtime logic.
 7. Prefer adding regression tests before changing runtime code.
-8. You have read-only access to the subtensor code in `./subtensor-reference` folder. Use it for reference when you write JS tests.
+8. You have read-only access to the subtensor code in `./subtensor-reference` folder. Use it for reference when you write JS tests. As an expetion you are allowed to build the subtensor if you are asked to do it explicitly.
 9. Never leave background node processes running after finishing work.
 
 # Permissions
@@ -143,3 +143,13 @@ Final verification rule:
   - `npm run test:locks-conviction`
 - If a saved JS test stalls at `ApiPromise.create({ provider })` while the node is listening and producing blocks, stop the hanging test process and rerun the saved file outside the sandbox.
 - Do not “fix” this by rewriting the test as inline Node. Final verification must still execute the saved test file.
+
+## Building subtensor
+
+- Change directory to `../../subtensor`
+- Run `cargo build --release --workspace --all-targets`
+
+## Testing on a live Testnet
+
+- Use the endpoint `wss://test.finney.opentensor.ai:443`
+- When you need test TAO, use the funded account id: `//TestnetFunded`
