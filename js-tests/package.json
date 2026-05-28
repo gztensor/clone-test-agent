@@ -8,6 +8,7 @@
     "test:total-issuance-trackers": "node tests/test-total-issuance-trackers.js",
     "test:net-tao-flow-emission-allocation": "node tests/test-net-tao-flow-emission-allocation.js",
     "test:locks-conviction": "node tests/test-locks-conviction.js",
+    "test:lock-dust-cleanup": "node tests/test-lock-dust-cleanup.js",
     "test:subnet-account-balances": "node tests/test-subnet-account-balances.js",
     "test:mainnet-lock-conviction": "node tests/mainnet-lock-conviction-read.js",
     "test:mainnet-hotkey-conviction-increases": "node tests/mainnet-hotkey-conviction-increases.js",
