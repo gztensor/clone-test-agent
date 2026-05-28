@@ -6,8 +6,10 @@ import { createTempLogger } from "../lib/file-log.js";
 
 loadDotenv();
 
-const HOTKEY = process.env.HOTKEY ?? "5Fn7rj78bfSrNcFQCHShC7aoVSneGLbiPD7xFHu3zhwFrQhs";
-const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "wss://test.finney.opentensor.ai:443";
+const HOTKEY = process.env.HOTKEY ?? "5Eeq15e55UTfFcsw6kUNRhzRwTsAHciXk5sPajARWXxtjzyA";
+const NETUID = process.env.NETUID === undefined ? 39 : Number(process.env.NETUID);
+const NETWORK = process.env.NETWORK ?? "mainnet";
+const WS_ENDPOINT = process.env.WS_ENDPOINT ?? defaultEndpoint();
 const FRACTION_BITS = 64n;
 const U64F64_SCALE = 1n << FRACTION_BITS;
 const RAO_PER_TAO = 1_000_000_000n;
@@ -18,7 +20,7 @@ let api;
 
 async function main() {
   await logger.start();
-  api = await connectApi(WS_ENDPOINT, { log: console.log });
+  api = await connectApi(WS_ENDPOINT, { log: (message) => console.log(redactEndpoint(message)) });
 
   try {
     assertLockMetadataAvailable();
@@ -28,8 +30,10 @@ async function main() {
 
     console.log("chain:", chain.toString());
     console.log("runtime:", runtimeVersion.specName.toString(), runtimeVersion.specVersion.toString());
+    console.log("network:", NETWORK);
     console.log("endpoint:", redactEndpoint(WS_ENDPOINT));
     console.log("hotkey:", HOTKEY);
+    console.log("netuid:", NETUID ?? "all");
 
     const first = await readHotkeyConvictionAtCurrentBlock();
     await waitForNextBlock(first.blockNumber);
@@ -39,6 +43,12 @@ async function main() {
     printSample("second", second);
 
     assert.ok(second.blockNumber > first.blockNumber, "expected second read to be at a later block");
+    if (NETUID !== null) {
+      assert.ok(
+        second.totalBits > first.totalBits,
+        `expected conviction to increase on netuid ${NETUID}: ${first.totalBits} -> ${second.totalBits}`
+      );
+    }
     console.log("testnet hotkey conviction read: ok");
   } finally {
     await api?.disconnect();
@@ -49,18 +59,41 @@ async function readHotkeyConvictionAtCurrentBlock() {
   const header = await api.rpc.chain.getHeader();
   const blockHash = header.hash;
   const blockNumber = header.number.toBigInt();
-  const [unlockRate, maturityRate, ownerHotkeys] = await Promise.all([
+  const [unlockRate, maturityRate, lockRows] = await Promise.all([
     api.query.subtensorModule.unlockRate.at(blockHash),
     api.query.subtensorModule.maturityRate.at(blockHash),
-    readOwnerHotkeys(blockHash),
+    readHotkeyLockRows(blockHash),
   ]);
 
+  const rolledRows = lockRows.map((row) => ({
+    ...row,
+    rolled: rollForwardLock(row.lock, blockNumber, unlockRate.toBigInt(), maturityRate.toBigInt(), row.perpetual, row.owner),
+  }));
+  const totalBits = rolledRows.reduce((sum, row) => sum + row.rolled.convictionBits, 0n);
+
+  return {
+    blockNumber,
+    blockHash: blockHash.toString(),
+    unlockRate: unlockRate.toBigInt(),
+    maturityRate: maturityRate.toBigInt(),
+    totalBits,
+    rows: rolledRows,
+  };
+}
+
+async function readHotkeyLockRows(blockHash) {
+  if (NETUID !== null) {
+    assert.ok(Number.isInteger(NETUID) && NETUID >= 0, `invalid NETUID: ${process.env.NETUID}`);
+    return readHotkeyLockRowsForNetuid(blockHash, NETUID);
+  }
+
+  const ownerHotkeys = await readOwnerHotkeys(blockHash);
   const hotkeyLocks = await readHotkeyLocksAt(blockHash, "hotkeyLock");
   const decayingHotkeyLocks = await readHotkeyLocksAt(blockHash, "decayingHotkeyLock");
   const ownerLocks = await readOwnerLocksForHotkeyAt(blockHash, "ownerLock", ownerHotkeys);
   const decayingOwnerLocks = await readOwnerLocksForHotkeyAt(blockHash, "decayingOwnerLock", ownerHotkeys);
 
-  const lockRows = [
+  return [
     ...hotkeyLocks.map((row) => ({ ...row, storage: "HotkeyLock", perpetual: true, owner: false })),
     ...decayingHotkeyLocks.map((row) => ({
       ...row,
@@ -76,20 +109,57 @@ async function readHotkeyConvictionAtCurrentBlock() {
       owner: true,
     })),
   ];
+}
 
-  const rolledRows = lockRows.map((row) => ({
-    ...row,
-    rolled: rollForwardLock(row.lock, blockNumber, unlockRate.toBigInt(), maturityRate.toBigInt(), row.perpetual, row.owner),
-  }));
-  const totalBits = rolledRows.reduce((sum, row) => sum + row.rolled.convictionBits, 0n);
+async function readHotkeyLockRowsForNetuid(blockHash, netuid) {
+  const ownerHotkey = (await api.query.subtensorModule.subnetOwnerHotkey.at(blockHash, netuid)).toString();
+  const rows = [
+    await readMaybeLockAt(blockHash, "hotkeyLock", [netuid, HOTKEY], {
+      netuid,
+      hotkey: HOTKEY,
+      storage: "HotkeyLock",
+      perpetual: true,
+      owner: false,
+    }),
+    await readMaybeLockAt(blockHash, "decayingHotkeyLock", [netuid, HOTKEY], {
+      netuid,
+      hotkey: HOTKEY,
+      storage: "DecayingHotkeyLock",
+      perpetual: false,
+      owner: false,
+    }),
+  ];
 
+  if (ownerHotkey === HOTKEY) {
+    rows.push(
+      await readMaybeLockAt(blockHash, "ownerLock", [netuid], {
+        netuid,
+        hotkey: HOTKEY,
+        storage: "OwnerLock",
+        perpetual: true,
+        owner: true,
+      }),
+      await readMaybeLockAt(blockHash, "decayingOwnerLock", [netuid], {
+        netuid,
+        hotkey: HOTKEY,
+        storage: "DecayingOwnerLock",
+        perpetual: false,
+        owner: true,
+      })
+    );
+  }
+
+  return rows.filter(Boolean);
+}
+
+async function readMaybeLockAt(blockHash, storageName, args, row) {
+  const maybeLock = await api.query.subtensorModule[storageName].at(blockHash, ...args);
+  if (maybeLock.isNone) {
+    return null;
+  }
   return {
-    blockNumber,
-    blockHash: blockHash.toString(),
-    unlockRate: unlockRate.toBigInt(),
-    maturityRate: maturityRate.toBigInt(),
-    totalBits,
-    rows: rolledRows,
+    ...row,
+    lock: decodeLockState(maybeLock.unwrap()),
   };
 }
 
@@ -265,6 +335,12 @@ function parseBigIntish(value) {
   if (typeof value === "string") {
     return BigInt(value.replaceAll(",", ""));
   }
+  if (value?.toBigInt) {
+    return value.toBigInt();
+  }
+  if (value?.toString && value.toString !== Object.prototype.toString) {
+    return BigInt(value.toString().replaceAll(",", ""));
+  }
   throw new Error(`could not decode bigint value from ${value}`);
 }
 
@@ -327,6 +403,18 @@ function loadDotenv() {
 
 function redactEndpoint(endpoint) {
   return endpoint.replace(/(apikey=)[^&]+/i, "$1<redacted>");
+}
+
+function defaultEndpoint() {
+  if (NETWORK === "mainnet") {
+    assert.ok(
+      process.env.ONFINALITY_API_KEY,
+      "ONFINALITY_API_KEY is required for mainnet unless WS_ENDPOINT is set"
+    );
+    return `wss://bittensor-finney.api.onfinality.io/ws?apikey=${process.env.ONFINALITY_API_KEY}`;
+  }
+
+  return "wss://test.finney.opentensor.ai:443";
 }
 
 main().catch(async (err) => {
