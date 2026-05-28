@@ -214,15 +214,19 @@ async function readPerpetualFlags(blockHash) {
 }
 
 function decodeLockState(lockState) {
-  const lockedMass = structField(lockState, "lockedMass", "locked_mass").toBigInt();
+  const lockedMass = parseBigIntish(structField(lockState, "lockedMass", "locked_mass"));
   const convictionValue = structField(lockState, "conviction");
   const convictionBits = decodeConvictionBits(convictionValue);
-  const convictionDecimal = convictionValue.toString();
-  const lastUpdate = structField(lockState, "lastUpdate", "last_update").toBigInt();
+  const convictionDecimal = formatConvictionValue(convictionValue);
+  const lastUpdate = parseBigIntish(structField(lockState, "lastUpdate", "last_update"));
   return { lockedMass, convictionBits, convictionDecimal, lastUpdate };
 }
 
 function decodeConvictionBits(value) {
+  if (value?.bits !== undefined) {
+    return parseBigIntish(value.bits);
+  }
+
   if (value.toBigInt) {
     return value.toBigInt();
   }
@@ -239,6 +243,16 @@ function decodeConvictionBits(value) {
 
   const parsed = JSON.parse(value.toString());
   return parseBigIntish(parsed.bits);
+}
+
+function formatConvictionValue(value) {
+  if (value?.toString && value.toString !== Object.prototype.toString) {
+    return value.toString();
+  }
+  if (value?.bits !== undefined) {
+    return JSON.stringify({ bits: value.bits.toString?.() ?? value.bits });
+  }
+  return String(value);
 }
 
 function parseBigIntish(value) {
@@ -260,6 +274,14 @@ function structField(value, ...names) {
     const field = value.get?.(name);
     if (field) return field;
   }
+
+  const json = value.toJSON?.();
+  if (json) {
+    for (const name of names) {
+      if (json[name] !== undefined) return json[name];
+    }
+  }
+
   throw new Error(`could not decode field ${names.join("/")} from ${value.toString()}`);
 }
 
