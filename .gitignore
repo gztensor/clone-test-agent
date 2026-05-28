@@ -1,3 +1,4 @@
+.env
 .local-chain
 subtensor-reference
 js-tests/node_modules

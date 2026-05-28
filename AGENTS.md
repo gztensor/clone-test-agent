@@ -153,3 +153,9 @@ Final verification rule:
 
 - Use the endpoint `wss://test.finney.opentensor.ai:443`
 - When you need test TAO, use the funded account id: `//TestnetFunded`
+
+## Testing on a live Mainnet
+
+- Use the endpoint: `wss://bittensor-finney.api.onfinality.io/ws?apikey=<api_key>`
+- Use ONFINALITY_API_KEY from .env file to replace <api_key> placeholder
+- Do not test with real balances, so any tests will be read-only
