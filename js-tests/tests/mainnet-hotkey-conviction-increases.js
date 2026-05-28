@@ -7,7 +7,7 @@ import { createTempLogger } from "../lib/file-log.js";
 loadDotenv();
 
 const NETWORK = "mainnet";
-const HOTKEY = "5Fc3ZZQAYB3SPXKcFnd1WJeyQvArSZZeB6LU1rb7zvQ6XvDh";
+const HOTKEY = parseHotkey();
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? defaultEndpoint();
 const MIN_FINALIZED_BLOCK_DELTA = Number(process.env.CONVICTION_WAIT_FINALIZED_BLOCKS ?? 3);
 const logger = createTempLogger("mainnet-hotkey-conviction-increases.log");
@@ -194,6 +194,18 @@ function defaultEndpoint() {
     "ONFINALITY_API_KEY is required for mainnet unless WS_ENDPOINT is set"
   );
   return `wss://bittensor-finney.api.onfinality.io/ws?apikey=${process.env.ONFINALITY_API_KEY}`;
+}
+
+function parseHotkey() {
+  const hotkeyArgIndex = process.argv.findIndex((arg) => arg === "--hotkey");
+  const hotkey =
+    process.argv.find((arg) => arg.startsWith("--hotkey="))?.slice("--hotkey=".length) ??
+    (hotkeyArgIndex >= 0 ? process.argv[hotkeyArgIndex + 1] : undefined) ??
+    process.env.HOTKEY ??
+    "5Fc3ZZQAYB3SPXKcFnd1WJeyQvArSZZeB6LU1rb7zvQ6XvDh";
+
+  assert.ok(hotkey, "HOTKEY or --hotkey is required");
+  return hotkey;
 }
 
 function loadDotenv() {
