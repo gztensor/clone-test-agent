@@ -11,6 +11,7 @@
     "test:subnet-account-balances": "node tests/test-subnet-account-balances.js",
     "test:mainnet-lock-conviction": "node tests/mainnet-lock-conviction-read.js",
     "test:testnet-lock-conviction": "node tests/testnet-lock-conviction-smoke.js",
+    "test:testnet-hotkey-conviction": "node tests/testnet-hotkey-conviction-read.js",
     "test:testnet-unlock-rate": "node tests/testnet-unlock-rate-read.js",
     "test:testnet-maturity-rate": "node tests/testnet-maturity-rate-read.js"
   },
