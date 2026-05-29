@@ -48,6 +48,7 @@ async function main() {
 
     const { netuid, hotkey } = await findTestHotkey();
     const aggregateStorage = await aggregateStorageForLock(testColdkey.address, netuid, hotkey);
+    assert.equal(aggregateStorage, "decayingHotkeyLock", "dust cleanup test must use DecayingHotkeyLock");
     console.log("test subnet:", netuid);
     console.log("test hotkey:", hotkey);
     console.log("test aggregate storage:", aggregateStorage);
@@ -90,8 +91,15 @@ async function main() {
     console.log("alpha unstaked:", alphaRemoved.toString());
 
     await assertNoLock(testColdkey.address, netuid, hotkey, "dust lock after unstake cleanup");
+    const aggregateAfterCleanup = await aggregateLockedMassOrZero(aggregateStorage, netuid, hotkey);
+    assert.equal(
+      aggregateAfterAdd.lockedMass - aggregateAfterCleanup,
+      DUST_LOCK_AMOUNT,
+      "DecayingHotkeyLock should be reduced by the collected dust amount"
+    );
     await assertNoAggregateLock(aggregateStorage, netuid, hotkey, "aggregate dust lock after unstake cleanup");
     await assertLockingColdkeysDoesNotContain(netuid, hotkey, testColdkey.address, "after dust cleanup");
+    console.log("DecayingHotkeyLock dust reduction:", (aggregateAfterAdd.lockedMass - aggregateAfterCleanup).toString());
     console.log("Lock dust cleanup removed Lock, aggregate lock, and LockingColdkeys entry: ok");
   } finally {
     if (api && originalUnlockRate !== undefined && originalMaturityRate !== undefined) {
@@ -236,6 +244,11 @@ async function requireAggregateLock(storageName, netuid, hotkey, label) {
 async function assertNoAggregateLock(storageName, netuid, hotkey, label) {
   const maybeLock = await queryAggregateLock(storageName, netuid, hotkey);
   assert.ok(maybeLock.isNone, `${label}: unexpected ${aggregateLabel(storageName, netuid, hotkey)} exists`);
+}
+
+async function aggregateLockedMassOrZero(storageName, netuid, hotkey) {
+  const maybeLock = await queryAggregateLock(storageName, netuid, hotkey);
+  return maybeLock.isSome ? decodeLockState(maybeLock.unwrap()).lockedMass : 0n;
 }
 
 async function assertLockingColdkeysContains(netuid, hotkey, coldkey, label) {
