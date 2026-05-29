@@ -10,15 +10,29 @@ const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUN_ID = process.env.LOCK_DUST_RUN_ID ?? `run${Date.now()}p${process.pid}`;
 const FUND_SOURCE_URI = process.env.LOCK_DUST_FUND_SOURCE_URI ?? "//Alice";
 const TEST_COLDKEY_URI = process.env.LOCK_DUST_COLDKEY_URI ?? `//LockDustCleanup//${RUN_ID}//coldkey`;
+const TEST_COLDKEY1_URI = process.env.LOCK_DUST_COLDKEY1_URI ?? `//LockDustCleanup//${RUN_ID}//coldkey1`;
+const TEST_COLDKEY2_URI = process.env.LOCK_DUST_COLDKEY2_URI ?? `//LockDustCleanup//${RUN_ID}//coldkey2`;
 const SOURCE_FUND_AMOUNT = BigInt(process.env.LOCK_DUST_SOURCE_FUND_AMOUNT ?? "100000000000");
 const STAKE_AMOUNT = BigInt(process.env.LOCK_DUST_STAKE_AMOUNT ?? "10000000000");
 const DUST_LOCK_AMOUNT = BigInt(process.env.LOCK_DUST_LOCK_AMOUNT ?? "101");
 const FAST_DECAY_RATE = BigInt(process.env.LOCK_DUST_FAST_DECAY_RATE ?? "1");
+const MULTI_SOURCE_FUND_AMOUNT = BigInt(process.env.LOCK_DUST_MULTI_SOURCE_FUND_AMOUNT ?? "2000000000000");
+const MULTI_STAKE_AMOUNT = BigInt(process.env.LOCK_DUST_MULTI_STAKE_AMOUNT ?? "1000000000000");
+const ONE_ALPHA = 1_000_000_000n;
+const DUST_AGGREGATE_LOCK_AMOUNT = 100n;
+const DUST_SCENARIO_DECAY_RATE = BigInt(process.env.LOCK_DUST_SCENARIO_DECAY_RATE ?? "216000");
+const DUST_SCENARIO_SETUP_DECAY_RATE = BigInt(
+  process.env.LOCK_DUST_SCENARIO_SETUP_DECAY_RATE ?? "18446744073709551615"
+);
+const DUST_SCENARIO_WAIT_BLOCKS = Number(process.env.LOCK_DUST_SCENARIO_WAIT_BLOCKS ?? "100");
+const UNSTAKE_ONE_ALPHA = ONE_ALPHA;
 const MIN_PRICE = 0n;
 
 const keyring = new Keyring({ type: "sr25519" });
 const fundSource = keyring.addFromUri(FUND_SOURCE_URI);
 const testColdkey = keyring.addFromUri(TEST_COLDKEY_URI);
+const testColdkey1 = keyring.addFromUri(TEST_COLDKEY1_URI);
+const testColdkey2 = keyring.addFromUri(TEST_COLDKEY2_URI);
 const logger = createTempLogger("test-lock-dust-cleanup.log");
 logger.captureConsole();
 
@@ -39,6 +53,8 @@ async function main() {
     console.log("start block:", startHeader.number.toString());
     console.log("run id:", RUN_ID);
     console.log("test coldkey:", testColdkey.address);
+    console.log("test coldkey1:", testColdkey1.address);
+    console.log("test coldkey2:", testColdkey2.address);
 
     assertMetadataAvailable();
 
@@ -101,6 +117,7 @@ async function main() {
     await assertLockingColdkeysDoesNotContain(netuid, hotkey, testColdkey.address, "after dust cleanup");
     console.log("DecayingHotkeyLock dust reduction:", (aggregateAfterAdd.lockedMass - aggregateAfterCleanup).toString());
     console.log("Lock dust cleanup removed Lock, aggregate lock, and LockingColdkeys entry: ok");
+    await runTwoColdkeyDustAggregateScenario();
   } finally {
     if (api && originalUnlockRate !== undefined && originalMaturityRate !== undefined) {
       await setLockRates(originalUnlockRate, originalMaturityRate, "restore original lock rates");
@@ -108,6 +125,109 @@ async function main() {
     await api?.disconnect();
     await logger.flush();
   }
+}
+
+async function runTwoColdkeyDustAggregateScenario() {
+  const { netuid, stakeHotkey, lockHotkey } = await findTestHotkeyPair();
+  console.log("two-coldkey dust subnet:", netuid);
+  console.log("two-coldkey stake hotkey:", stakeHotkey);
+  console.log("two-coldkey lock hotkey:", lockHotkey);
+
+  await setLockRates(
+    DUST_SCENARIO_SETUP_DECAY_RATE,
+    DUST_SCENARIO_SETUP_DECAY_RATE,
+    "set two-coldkey setup no-decay rates"
+  );
+  await fundAccount(testColdkey1.address, MULTI_SOURCE_FUND_AMOUNT, "test coldkey1");
+  await fundAccount(testColdkey2.address, MULTI_SOURCE_FUND_AMOUNT, "test coldkey2");
+
+  const coldkey1Alpha = await addStake(testColdkey1, stakeHotkey, netuid, MULTI_STAKE_AMOUNT, "coldkey1 stake to hotkey1");
+  const coldkey2Alpha = await addStake(testColdkey2, stakeHotkey, netuid, MULTI_STAKE_AMOUNT, "coldkey2 stake to hotkey1");
+  assert.ok(coldkey1Alpha > ONE_ALPHA + UNSTAKE_ONE_ALPHA, `coldkey1 alpha too low: ${coldkey1Alpha}`);
+  assert.ok(coldkey2Alpha > UNSTAKE_ONE_ALPHA, `coldkey2 alpha too low: ${coldkey2Alpha}`);
+  console.log("coldkey1 alpha added:", coldkey1Alpha.toString());
+  console.log("coldkey2 alpha added:", coldkey2Alpha.toString());
+
+  await Promise.all([
+    lockStake(testColdkey1, lockHotkey, netuid, ONE_ALPHA),
+    lockStake(testColdkey2, lockHotkey, netuid, DUST_AGGREGATE_LOCK_AMOUNT),
+  ]);
+
+  const aggregateAfterLocks = await requireAggregateLock(
+    "decayingHotkeyLock",
+    netuid,
+    lockHotkey,
+    "two-coldkey aggregate after locks"
+  );
+  assert.equal(
+    aggregateAfterLocks.lockedMass,
+    ONE_ALPHA + DUST_AGGREGATE_LOCK_AMOUNT,
+    "DecayingHotkeyLock aggregate after both locks"
+  );
+  await assertLockingColdkeysContains(netuid, lockHotkey, testColdkey1.address, "after coldkey1 lockStake");
+  await assertLockingColdkeysContains(netuid, lockHotkey, testColdkey2.address, "after coldkey2 lockStake");
+  console.log("two-coldkey aggregate after locks:", formatLock(aggregateAfterLocks));
+
+  await setLockRates(DUST_SCENARIO_DECAY_RATE, DUST_SCENARIO_DECAY_RATE, "set two-coldkey dust scenario rates");
+  await waitForFinalizedBlocks(DUST_SCENARIO_WAIT_BLOCKS);
+
+  await removeStake(testColdkey1, stakeHotkey, netuid, UNSTAKE_ONE_ALPHA, "coldkey1 removes 1 alpha stake");
+  const coldkey1LockAfterUnstake = await requireLock(
+    testColdkey1.address,
+    netuid,
+    lockHotkey,
+    "coldkey1 lock after unstake roll-forward"
+  );
+  const aggregateAfterColdkey1 = await requireAggregateLock(
+    "decayingHotkeyLock",
+    netuid,
+    lockHotkey,
+    "aggregate after coldkey1 unstake"
+  );
+  assert.ok(
+    coldkey1LockAfterUnstake.lockedMass >= 999_000_000n && coldkey1LockAfterUnstake.lockedMass < ONE_ALPHA,
+    `expected coldkey1 lock to decay to 999??????, got ${coldkey1LockAfterUnstake.lockedMass}`
+  );
+  assert.equal(
+    aggregateAfterColdkey1.lockedMass,
+    coldkey1LockAfterUnstake.lockedMass + DUST_AGGREGATE_LOCK_AMOUNT,
+    "DecayingHotkeyLock aggregate after coldkey1 roll-forward should be decayed 1 alpha plus 100 dust"
+  );
+  console.log("coldkey1 lock after unstake:", formatLock(coldkey1LockAfterUnstake));
+  console.log("aggregate after coldkey1 unstake:", formatLock(aggregateAfterColdkey1));
+
+  await removeStake(testColdkey2, stakeHotkey, netuid, UNSTAKE_ONE_ALPHA, "coldkey2 removes 1 alpha stake");
+  await assertNoLock(testColdkey2.address, netuid, lockHotkey, "coldkey2 dust lock after unstake cleanup");
+  await assertLockingColdkeysDoesNotContain(netuid, lockHotkey, testColdkey2.address, "after coldkey2 dust cleanup");
+  const coldkey1LockAfterColdkey2 = await requireLock(
+    testColdkey1.address,
+    netuid,
+    lockHotkey,
+    "coldkey1 lock after coldkey2 dust cleanup"
+  );
+  const aggregateAfterColdkey2 = await requireAggregateLock(
+    "decayingHotkeyLock",
+    netuid,
+    lockHotkey,
+    "aggregate after coldkey2 dust cleanup"
+  );
+  assert.ok(
+    aggregateAfterColdkey2.lockedMass >= 999_000_000n && aggregateAfterColdkey2.lockedMass < ONE_ALPHA,
+    `expected aggregate to remain 999?????? after dust cleanup, got ${aggregateAfterColdkey2.lockedMass}`
+  );
+  assert.equal(
+    aggregateAfterColdkey2.lockedMass,
+    coldkey1LockAfterColdkey2.lockedMass,
+    "DecayingHotkeyLock aggregate after coldkey2 roll-forward should match coldkey1 without 100 dust"
+  );
+  assert.equal(
+    aggregateAfterColdkey1.lockedMass - aggregateAfterColdkey2.lockedMass,
+    DUST_AGGREGATE_LOCK_AMOUNT,
+    "coldkey2 cleanup should remove exactly 100 aggregate dust"
+  );
+  console.log("coldkey1 lock after coldkey2 cleanup:", formatLock(coldkey1LockAfterColdkey2));
+  console.log("aggregate after coldkey2 cleanup:", formatLock(aggregateAfterColdkey2));
+  console.log("two-coldkey DecayingHotkeyLock dust cleanup removed 100 aggregate dust: ok");
 }
 
 main().catch(async (error) => {
@@ -171,6 +291,37 @@ async function findTestHotkey() {
   throw new Error("no initialized transfer-enabled subnet with a non-owner hotkey and no decaying hotkey lock found");
 }
 
+async function findTestHotkeyPair() {
+  const initializedEntries = await initializedSubnetStorage().entries();
+  const initializedNetuids = initializedEntries
+    .filter(([, initialized]) => initialized.isTrue)
+    .map(([key]) => key.args[0].toNumber())
+    .sort((a, b) => a - b);
+
+  for (const netuid of initializedNetuids) {
+    const transferEnabled = await api.query.subtensorModule.transferToggle(netuid);
+    if (!transferEnabled.isTrue) continue;
+
+    const ownerHotkey = (await api.query.subtensorModule.subnetOwnerHotkey(netuid)).toString();
+    const hotkeys = (await api.query.subtensorModule.keys.entries(netuid))
+      .map(([, hotkey]) => hotkey.toString())
+      .filter((hotkey, index, all) => hotkey && hotkey !== ownerHotkey && all.indexOf(hotkey) === index);
+
+    for (const lockHotkey of hotkeys) {
+      if (!(await hasNoDecayingHotkeyLock(netuid, lockHotkey))) continue;
+
+      const stakeHotkey = hotkeys.find((hotkey) => hotkey !== lockHotkey);
+      if (stakeHotkey) {
+        return { netuid, stakeHotkey, lockHotkey };
+      }
+    }
+  }
+
+  throw new Error(
+    "no initialized transfer-enabled subnet with two non-owner hotkeys and an unused decaying lock target found"
+  );
+}
+
 function initializedSubnetStorage() {
   return api.query.swap?.palSwapInitialized ?? api.query.swap?.swapV3Initialized;
 }
@@ -199,13 +350,24 @@ async function setLockRates(unlockRate, maturityRate, label) {
   console.log("lock rates:", `unlock=${storedUnlockRate}`, `maturity=${storedMaturityRate}`);
 }
 
-async function addStake(signer, hotkey, netuid) {
+async function addStake(signer, hotkey, netuid, amount = STAKE_AMOUNT, label = "addStake for dust cleanup test") {
   const result = await submitAndWait(
     signer,
-    api.tx.subtensorModule.addStake(hotkey, netuid, STAKE_AMOUNT),
-    "addStake for dust cleanup test"
+    api.tx.subtensorModule.addStake(hotkey, netuid, amount),
+    label
   );
   return assertStakeAddedEvent(result.events, hotkey, netuid);
+}
+
+async function removeStake(signer, hotkey, netuid, amount, label) {
+  const result = await submitAndWait(
+    signer,
+    api.tx.subtensorModule.removeStakeLimit(hotkey, netuid, amount, MIN_PRICE, false),
+    label
+  );
+  const alphaRemoved = assertStakeRemovedEvent(result.events, hotkey, netuid);
+  console.log(`${label} alpha unstaked:`, alphaRemoved.toString());
+  return alphaRemoved;
 }
 
 async function lockStake(signer, hotkey, netuid, amount) {
@@ -399,10 +561,33 @@ async function submitAndWait(signer, tx, label) {
 }
 
 async function waitForFinalizedBlocks(count) {
+  let previous = await getFinalizedBlockNumber();
   for (let i = 0; i < count; i++) {
-    const header = await waitForFinalizedBlock();
-    console.log("finalized wait block:", header.number.toString());
+    previous = await waitForNextFinalizedBlock(previous);
+    console.log("finalized wait block:", previous.toString());
   }
+}
+
+async function waitForNextFinalizedBlock(previous) {
+  const timeoutAt = Date.now() + Number(process.env.FINALIZED_BLOCK_TIMEOUT_MS ?? 180_000);
+  while (Date.now() < timeoutAt) {
+    const current = await getFinalizedBlockNumber();
+    if (current > previous) {
+      return current;
+    }
+    await sleep(1_000);
+  }
+  throw new Error(`timed out waiting for finalized block after ${previous}`);
+}
+
+async function getFinalizedBlockNumber() {
+  const hash = await api.rpc.chain.getFinalizedHead();
+  const header = await api.rpc.chain.getHeader(hash);
+  return header.number.toBigInt();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function waitForFinalizedBlock() {
