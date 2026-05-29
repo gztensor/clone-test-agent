@@ -19,12 +19,14 @@ const FAST_DECAY_RATE = BigInt(process.env.LOCK_DUST_FAST_DECAY_RATE ?? "1");
 const MULTI_SOURCE_FUND_AMOUNT = BigInt(process.env.LOCK_DUST_MULTI_SOURCE_FUND_AMOUNT ?? "2000000000000");
 const MULTI_STAKE_AMOUNT = BigInt(process.env.LOCK_DUST_MULTI_STAKE_AMOUNT ?? "1000000000000");
 const ONE_ALPHA = 1_000_000_000n;
+const LOCK_STATE_ZERO_THRESHOLD = 100n;
 const DUST_AGGREGATE_LOCK_AMOUNT = 100n;
 const DUST_SCENARIO_DECAY_RATE = BigInt(process.env.LOCK_DUST_SCENARIO_DECAY_RATE ?? "216000");
 const DUST_SCENARIO_SETUP_DECAY_RATE = BigInt(
   process.env.LOCK_DUST_SCENARIO_SETUP_DECAY_RATE ?? "18446744073709551615"
 );
-const DUST_SCENARIO_WAIT_BLOCKS = Number(process.env.LOCK_DUST_SCENARIO_WAIT_BLOCKS ?? "100");
+const FAST_DUST_WAIT_BLOCKS = blocksToDecayBelowDust(DUST_LOCK_AMOUNT, FAST_DECAY_RATE);
+const DUST_SCENARIO_WAIT_BLOCKS = blocksToDecayBelowDust(DUST_AGGREGATE_LOCK_AMOUNT, DUST_SCENARIO_DECAY_RATE);
 const UNSTAKE_ONE_ALPHA = ONE_ALPHA;
 const MIN_PRICE = 0n;
 
@@ -95,7 +97,8 @@ async function main() {
     console.log("aggregate after add:", formatLock(aggregateAfterAdd));
     console.log("LockingColdkeys contains test coldkey after lockStake: ok");
 
-    await waitForFinalizedBlocks(2);
+    console.log("fast dust wait blocks:", FAST_DUST_WAIT_BLOCKS.toString());
+    await waitForFinalizedBlocks(FAST_DUST_WAIT_BLOCKS);
     const unstakeAmount = alphaAdded / 4n;
     assert.ok(unstakeAmount > 0n, "not enough alpha to trigger unstake cleanup");
     const unstakeResult = await submitAndWait(
@@ -169,6 +172,7 @@ async function runTwoColdkeyDustAggregateScenario() {
   console.log("two-coldkey aggregate after locks:", formatLock(aggregateAfterLocks));
 
   await setLockRates(DUST_SCENARIO_DECAY_RATE, DUST_SCENARIO_DECAY_RATE, "set two-coldkey dust scenario rates");
+  console.log("two-coldkey dust wait blocks:", DUST_SCENARIO_WAIT_BLOCKS.toString());
   await waitForFinalizedBlocks(DUST_SCENARIO_WAIT_BLOCKS);
 
   await removeStake(testColdkey1, stakeHotkey, netuid, UNSTAKE_ONE_ALPHA, "coldkey1 removes 1 alpha stake");
@@ -430,7 +434,17 @@ async function assertLockingColdkeysDoesNotContain(netuid, hotkey, coldkey, labe
 }
 
 async function lockingColdkeys(netuid, hotkey) {
-  return (await api.query.subtensorModule.lockingColdkeys(netuid, hotkey)).map((coldkey) => coldkey.toString());
+  try {
+    const coldkeys = await api.query.subtensorModule.lockingColdkeys(netuid, hotkey);
+    return coldkeys.map((coldkey) => coldkey.toString());
+  } catch (error) {
+    if (!String(error.message ?? error).includes("requiring 3 arguments")) {
+      throw error;
+    }
+  }
+
+  const entries = await api.query.subtensorModule.lockingColdkeys.entries(netuid, hotkey);
+  return entries.map(([key]) => key.args[2].toString());
 }
 
 async function aggregateStorageForLock(coldkey, netuid, hotkey) {
@@ -618,6 +632,41 @@ function formatDispatchError(error) {
 
   const decoded = api.registry.findMetaError(error.asModule);
   return `${decoded.section}.${decoded.name}: ${decoded.docs.join(" ")}`;
+}
+
+function blocksToDecayBelowDust(amount, tau) {
+  if (amount < LOCK_STATE_ZERO_THRESHOLD) {
+    return 0;
+  }
+
+  if (tau === 0n) {
+    return 1;
+  }
+
+  const estimate = Math.max(
+    1,
+    Math.floor(Number(tau) * Math.log(Number(amount) / Number(LOCK_STATE_ZERO_THRESHOLD)))
+  );
+  let blocks = estimate;
+  while (decayedLockedMass(amount, blocks, tau) >= LOCK_STATE_ZERO_THRESHOLD) {
+    blocks += 1;
+  }
+  while (blocks > 0 && decayedLockedMass(amount, blocks - 1, tau) < LOCK_STATE_ZERO_THRESHOLD) {
+    blocks -= 1;
+  }
+  return blocks;
+}
+
+function decayedLockedMass(amount, blocks, tau) {
+  if (blocks === 0) {
+    return amount;
+  }
+  if (tau === 0n) {
+    return 0n;
+  }
+
+  const decay = Math.exp(Math.max(-40, -blocks / Number(tau)));
+  return BigInt(Math.trunc(Number(amount) * decay));
 }
 
 function formatLock(lock) {
