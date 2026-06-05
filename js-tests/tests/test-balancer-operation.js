@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Keyring } from "@polkadot/api";
+import { u8aToHex } from "@polkadot/util";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
@@ -25,6 +26,7 @@ const logger = createTempLogger("test-balancer-operation.log");
 logger.captureConsole();
 
 let api;
+let lastFinalizedBlockNumber = null;
 
 async function main() {
   await logger.start();
@@ -44,7 +46,9 @@ async function main() {
   if (await check("balancer storage availability", assertBalancerStorageAvailable, failures)) {
     const balancerSummary = await assertBalancerWeights();
     const epochSummary = await assertEpochUpdatesReserves(balancerSummary.sampleNetuid);
-    await assertStakingSuiteWorks(epochSummary.netuid);
+    const injectionSummary = await assertProtocolLiquidityInjected(epochSummary.netuid);
+    await withTemporaryTempo(injectionSummary.netuid, 1, () => assertValidatorsReceiveRewards(injectionSummary.netuid));
+    await assertStakingSuiteWorks(injectionSummary.netuid);
   }
 
   assert.equal(failures.length, 0, `balancer operation test failed:\n${failures.join("\n")}`);
@@ -79,8 +83,17 @@ function assertBalancerStorageAvailable() {
   const missing = [
     ["Swap.SwapBalancer", api.query.swap?.swapBalancer],
     ["Swap.PalSwapInitialized", api.query.swap?.palSwapInitialized],
+    ["Swap.FeeRate", api.query.swap?.feeRate],
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
+    ["SubtensorModule.SubnetAlphaInEmission", api.query.subtensorModule?.subnetAlphaInEmission],
+    ["SubtensorModule.SubnetTaoInEmission", api.query.subtensorModule?.subnetTaoInEmission],
+    ["SubtensorModule.SubnetAlphaOutEmission", api.query.subtensorModule?.subnetAlphaOutEmission],
+    ["SubtensorModule.Emission", api.query.subtensorModule?.emission],
+    ["SubtensorModule.Dividends", api.query.subtensorModule?.dividends],
+    ["SubtensorModule.ValidatorPermit", api.query.subtensorModule?.validatorPermit],
+    ["SubtensorModule.LastUpdate", api.query.subtensorModule?.lastUpdate],
+    ["SubtensorModule.Tempo", api.query.subtensorModule?.tempo],
     ["SubtensorModule.addStake", api.tx.subtensorModule?.addStake],
     ["SubtensorModule.addStakeLimit", api.tx.subtensorModule?.addStakeLimit],
     ["SubtensorModule.removeStakeLimit", api.tx.subtensorModule?.removeStakeLimit],
@@ -88,6 +101,8 @@ function assertBalancerStorageAvailable() {
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
     ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
     ["SubtensorModule.TransferToggle", api.query.subtensorModule?.transferToggle],
+    ["Sudo.sudo", api.tx.sudo?.sudo],
+    ["System.setStorage", api.tx.system?.setStorage],
   ].filter(([, query]) => !query);
 
   assert.equal(
@@ -180,7 +195,7 @@ async function assertEpochUpdatesReserves(preferredNetuid) {
       console.log(
         `reserve changed netuid ${changed.netuid}: tao ${previous.tao}->${changed.tao}, alpha ${previous.alpha}->${changed.alpha}`
       );
-      return { netuid: changed.netuid };
+      return { netuid: changed.netuid, previous, current: changed, block: header.number.toString() };
     }
 
     if (blocks % 30 === 0) {
@@ -189,6 +204,102 @@ async function assertEpochUpdatesReserves(preferredNetuid) {
   }
 
   throw new Error(`no SubnetTAO/SubnetAlphaIn reserve changed within ${MAX_BLOCKS_TO_WAIT} finalized blocks`);
+}
+
+async function assertProtocolLiquidityInjected(preferredNetuid) {
+  let watched = await injectionSnapshots();
+  assert.ok(watched.length > 0, "no initialized subnets have reserve/emission state to watch");
+
+  watched.sort((a, b) => (a.netuid === preferredNetuid ? -1 : b.netuid === preferredNetuid ? 1 : a.netuid - b.netuid));
+  console.log(
+    "watching protocol injection:",
+    watched.slice(0, 10).map(({ netuid, alphaInEmission, taoInEmission }) => `${netuid}:alpha_in=${alphaInEmission},tao_in=${taoInEmission}`).join("; ")
+  );
+
+  for (let blocks = 1; blocks <= MAX_BLOCKS_TO_WAIT; blocks++) {
+    const header = await waitForFinalizedBlock();
+    const latest = await injectionSnapshots();
+    const injected = latest.find((current) => {
+      const previous = watched.find(({ netuid }) => netuid === current.netuid);
+      return (
+        previous &&
+        (current.alphaInEmission > 0n || current.taoInEmission > 0n) &&
+        (current.alpha !== previous.alpha || current.tao !== previous.tao) &&
+        (current.alpha >= previous.alpha || current.tao >= previous.tao)
+      );
+    });
+
+    if (injected) {
+      const previous = watched.find(({ netuid }) => netuid === injected.netuid);
+      console.log("protocol injection block:", header.number.toString());
+      console.log(
+        `protocol liquidity injected on netuid ${injected.netuid}: alpha_in_emission=${injected.alphaInEmission}, tao_in_emission=${injected.taoInEmission}, alpha_out_emission=${injected.alphaOutEmission}`
+      );
+      console.log(
+        `injected pool reserves on netuid ${injected.netuid}: tao ${previous.tao}->${injected.tao}, alpha ${previous.alpha}->${injected.alpha}`
+      );
+      return injected;
+    }
+
+    if (blocks % 30 === 0) {
+      console.log(`waited ${blocks}/${MAX_BLOCKS_TO_WAIT} finalized blocks for protocol liquidity injection`);
+    }
+  }
+
+  throw new Error(`no protocol liquidity injection changed pool reserves within ${MAX_BLOCKS_TO_WAIT} finalized blocks`);
+}
+
+async function assertValidatorsReceiveRewards(preferredNetuid) {
+  let watched = await validatorRewardSnapshots();
+  assert.ok(watched.length > 0, "no initialized subnets have validator reward vectors to watch");
+
+  watched.sort((a, b) => (a.netuid === preferredNetuid ? -1 : b.netuid === preferredNetuid ? 1 : a.netuid - b.netuid));
+  console.log(
+    "watching validator rewards:",
+    watched.slice(0, 10).map(({ netuid, rewardedValidators, emissionTotal }) => `${netuid}:validators=${rewardedValidators},emission=${emissionTotal}`).join("; ")
+  );
+
+  for (let blocks = 1; blocks <= MAX_BLOCKS_TO_WAIT; blocks++) {
+    const header = await waitForFinalizedBlock();
+    const latest = await validatorRewardSnapshots();
+    const changed = latest.find((current) => {
+      const previous = watched.find(({ netuid }) => netuid === current.netuid);
+      return previous && current.rewardedValidators > 0 && current.fingerprint !== previous.fingerprint;
+    });
+
+    if (changed) {
+      console.log("validator reward epoch block:", header.number.toString());
+      console.log(
+        `validator rewards changed on netuid ${changed.netuid}: validators=${changed.rewardedValidators}, dividends_sum=${changed.dividendTotal}, emission_sum=${changed.emissionTotal}`
+      );
+      return changed;
+    }
+
+    if (blocks % 30 === 0) {
+      console.log(`waited ${blocks}/${MAX_BLOCKS_TO_WAIT} finalized blocks for validator reward update`);
+    }
+  }
+
+  throw new Error(`no subnet validator reward vector changed within ${MAX_BLOCKS_TO_WAIT} finalized blocks`);
+}
+
+async function withTemporaryTempo(netuid, tempo, fn) {
+  const originalTempo = (await api.query.subtensorModule.tempo(netuid)).toNumber();
+
+  try {
+    await sudoSetStorage(
+      [[api.query.subtensorModule.tempo.key(netuid), storageValueHex("u16", tempo)]],
+      `sudo set temporary tempo ${tempo} for netuid ${netuid}`
+    );
+    console.log(`temporary tempo set on netuid ${netuid}: ${originalTempo}->${tempo}`);
+    return await fn();
+  } finally {
+    await sudoSetStorage(
+      [[api.query.subtensorModule.tempo.key(netuid), storageValueHex("u16", originalTempo)]],
+      `sudo restore tempo for netuid ${netuid}`
+    );
+    console.log(`temporary tempo restored on netuid ${netuid}: ${tempo}->${originalTempo}`);
+  }
 }
 
 async function assertStakingSuiteWorks(netuid) {
@@ -251,6 +362,7 @@ async function assertAddStakeLimitWorks(hotkey, netuid) {
 
 async function assertRemoveStakeLimitWorks(hotkey, netuid, ownedAlpha) {
   const alphaBefore = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+  const reservesBefore = await reserveSnapshot(netuid);
   const amount = ownedAlpha / 4n;
   assert.ok(amount > 0n, `not enough alpha on netuid ${netuid} to test removeStakeLimit`);
 
@@ -261,10 +373,19 @@ async function assertRemoveStakeLimitWorks(hotkey, netuid, ownedAlpha) {
     `remove stake limit on netuid ${netuid}`
   );
   const alphaAfter = (await api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid)).toBigInt();
+  const reservesAfter = await reserveSnapshot(netuid);
 
   assert.ok(alphaAfter < alphaBefore, `removeStakeLimit did not reduce TotalHotkeyAlpha for netuid ${netuid}`);
-  const alphaRemoved = assertStakeRemovedEvent(result.events, hotkey, netuid);
+  const { alphaRemoved, feePaid } = assertStakeRemovedEvent(result.events, hotkey, netuid);
+  assert.ok(feePaid > 0n, `removeStakeLimit did not report a positive swap fee on netuid ${netuid}`);
+  assert.ok(
+    reservesAfter.tao !== reservesBefore.tao || reservesAfter.alpha !== reservesBefore.alpha,
+    `fee-bearing removeStakeLimit did not change swap pool reserves on netuid ${netuid}`
+  );
   console.log(`removeStakeLimit reduced alpha on netuid ${netuid}: ${alphaBefore}->${alphaAfter}`);
+  console.log(
+    `removeStakeLimit fee and pool update on netuid ${netuid}: fee=${feePaid}, tao ${reservesBefore.tao}->${reservesAfter.tao}, alpha ${reservesBefore.alpha}->${reservesAfter.alpha}`
+  );
   return alphaRemoved;
 }
 
@@ -344,7 +465,10 @@ function assertStakeRemovedEvent(events, hotkey, netuid) {
   });
 
   assert.ok(event, `StakeRemoved event not found for hotkey ${hotkey} on netuid ${netuid}`);
-  return event.event.data[3].toBigInt();
+  return {
+    alphaRemoved: event.event.data[3].toBigInt(),
+    feePaid: event.event.data[5]?.toBigInt() ?? 0n,
+  };
 }
 
 function assertStakeTransferredEvent(events, hotkey, originNetuid, destinationNetuid) {
@@ -408,6 +532,92 @@ async function reserveSnapshots() {
   return snapshots;
 }
 
+async function reserveSnapshot(netuid) {
+  const [tao, alpha] = await Promise.all([
+    api.query.subtensorModule.subnetTAO(netuid),
+    api.query.subtensorModule.subnetAlphaIn(netuid),
+  ]);
+  return {
+    netuid,
+    tao: tao.toBigInt(),
+    alpha: alpha.toBigInt(),
+  };
+}
+
+async function injectionSnapshots() {
+  const initializedEntries = await api.query.swap.palSwapInitialized.entries();
+  const initializedNetuids = initializedEntries
+    .filter(([, initialized]) => initialized.isTrue)
+    .map(([key]) => key.args[0].toNumber());
+
+  const snapshots = [];
+  for (const netuid of initializedNetuids) {
+    const [tao, alpha, alphaInEmission, taoInEmission, alphaOutEmission] = await Promise.all([
+      api.query.subtensorModule.subnetTAO(netuid),
+      api.query.subtensorModule.subnetAlphaIn(netuid),
+      api.query.subtensorModule.subnetAlphaInEmission(netuid),
+      api.query.subtensorModule.subnetTaoInEmission(netuid),
+      api.query.subtensorModule.subnetAlphaOutEmission(netuid),
+    ]);
+    snapshots.push({
+      netuid,
+      tao: tao.toBigInt(),
+      alpha: alpha.toBigInt(),
+      alphaInEmission: alphaInEmission.toBigInt(),
+      taoInEmission: taoInEmission.toBigInt(),
+      alphaOutEmission: alphaOutEmission.toBigInt(),
+    });
+  }
+  return snapshots;
+}
+
+async function validatorRewardSnapshots() {
+  const initializedEntries = await api.query.swap.palSwapInitialized.entries();
+  const initializedNetuids = initializedEntries
+    .filter(([, initialized]) => initialized.isTrue)
+    .map(([key]) => key.args[0].toNumber());
+
+  const snapshots = [];
+  for (const netuid of initializedNetuids) {
+    const [emission, dividends, validatorPermit, lastUpdate] = await Promise.all([
+      api.query.subtensorModule.emission(netuid),
+      api.query.subtensorModule.dividends(netuid),
+      api.query.subtensorModule.validatorPermit(netuid),
+      api.query.subtensorModule.lastUpdate(netuid),
+    ]);
+    const emissionValues = codecVecToBigInts(emission);
+    const dividendValues = codecVecToBigInts(dividends);
+    const permitValues = codecVecToBools(validatorPermit);
+    const lastUpdateValues = codecVecToBigInts(lastUpdate);
+    const rewardedValidators = dividendValues.filter((value, index) => value > 0n && permitValues[index]).length;
+    snapshots.push({
+      netuid,
+      rewardedValidators,
+      dividendTotal: sumBigInts(dividendValues),
+      emissionTotal: sumBigInts(emissionValues),
+      fingerprint: [
+        emissionValues.join(","),
+        dividendValues.join(","),
+        permitValues.join(","),
+        lastUpdateValues.join(","),
+      ].join("|"),
+    });
+  }
+  return snapshots;
+}
+
+function codecVecToBigInts(value) {
+  return Array.from(value).map((item) => item.toBigInt());
+}
+
+function codecVecToBools(value) {
+  return Array.from(value).map((item) => item.isTrue ?? Boolean(item.toJSON()));
+}
+
+function sumBigInts(values) {
+  return values.reduce((sum, value) => sum + value, 0n);
+}
+
 function balancesTransfer(api, dest, amount) {
   if (api.tx.balances.transferKeepAlive) {
     return api.tx.balances.transferKeepAlive(dest, amount);
@@ -457,6 +667,10 @@ async function submitAndWait(api, signer, tx, label) {
   });
 }
 
+async function sudoSetStorage(entries, label) {
+  await submitAndWait(api, transferSource, api.tx.sudo.sudo(api.tx.system.setStorage(entries)), label);
+}
+
 function waitForFinalizedBlock() {
   return new Promise((resolve, reject) => {
     let unsubscribe;
@@ -470,12 +684,23 @@ function waitForFinalizedBlock() {
     };
 
     api.rpc.chain
-      .subscribeFinalizedHeads((header) => finish(resolve, header))
+      .subscribeFinalizedHeads((header) => {
+        const blockNumber = header.number.toNumber();
+        if (lastFinalizedBlockNumber !== null && blockNumber <= lastFinalizedBlockNumber) {
+          return;
+        }
+        lastFinalizedBlockNumber = blockNumber;
+        finish(resolve, header);
+      })
       .then((unsub) => {
         unsubscribe = unsub;
       })
       .catch((error) => finish(reject, error));
   });
+}
+
+function storageValueHex(type, value) {
+  return u8aToHex(api.createType(type, value).toU8a());
 }
 
 function formatDispatchError(error) {
