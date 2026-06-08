@@ -14,6 +14,7 @@
     "test:mainnet-hotkey-conviction-increases": "node tests/mainnet-hotkey-conviction-increases.js",
     "test:alpha-deprecated-stake-histogram": "node tests/test-alpha-deprecated-stake-histogram.js",
     "test:testnet-lock-conviction": "node tests/testnet-lock-conviction-smoke.js",
+    "test:testnet-swap-hotkey-v2-lock-conviction": "node tests/testnet-swap-hotkey-v2-lock-conviction.js",
     "test:testnet-hotkey-conviction": "node tests/testnet-hotkey-conviction-read.js",
     "test:testnet-unlock-rate": "node tests/testnet-unlock-rate-read.js",
     "test:testnet-maturity-rate": "node tests/testnet-maturity-rate-read.js"
