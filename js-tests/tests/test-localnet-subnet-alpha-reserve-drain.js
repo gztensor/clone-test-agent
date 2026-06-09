@@ -12,6 +12,7 @@ const MIN_STAKE_TAO = 2_000_000n;
 const MINIMUM_BUY_SEARCH_WINDOW = 100n;
 const SWAP_MINIMUM_RESERVE = 1_000_000n;
 const MAX_PRICE = 18_446_744_073_709_551_615n;
+const LONG_TERM_WAIT_BLOCKS = Number(process.env.LONG_TERM_WAIT_BLOCKS ?? 30);
 
 const keyring = new Keyring({ type: "sr25519" });
 const alice = keyring.addFromUri("//Alice");
@@ -70,6 +71,29 @@ async function main() {
       "ReservesTooLow"
     );
     console.log("post-drain buy rejected with reserve error:", `alpha_in=${afterDrain.alphaIn}`);
+
+    const waitStart = await currentBlockNumber();
+    await waitForBlocks(LONG_TERM_WAIT_BLOCKS);
+    const waitEnd = await currentBlockNumber();
+    const afterWait = await readReserves(netuid);
+    console.log(
+      "reserves after no-user-action wait:",
+      `start_block=${waitStart}`,
+      `end_block=${waitEnd}`,
+      `waited_blocks=${waitEnd - waitStart}`,
+      formatReserves(afterWait)
+    );
+    assert.ok(
+      afterWait.alphaIn < SWAP_MINIMUM_RESERVE,
+      `expected alpha reserve to stay below ${SWAP_MINIMUM_RESERVE} without user action, got ${afterWait.alphaIn}`
+    );
+
+    await expectDispatchError(
+      api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, netuid, MIN_STAKE_TAO, MAX_PRICE, false),
+      "buy after waiting without user action",
+      "ReservesTooLow"
+    );
+    console.log("post-wait buy still rejected with reserve error:", `alpha_in=${afterWait.alphaIn}`);
     console.log("localnet subnet alpha reserve drain: ok");
   } finally {
     await api?.disconnect();
@@ -236,6 +260,23 @@ async function readReserves(netuid) {
     alphaIn: alphaIn.toBigInt(),
     alphaOut: alphaOut.toBigInt(),
   };
+}
+
+async function currentBlockNumber() {
+  const header = await api.rpc.chain.getHeader();
+  return header.number.toNumber();
+}
+
+async function waitForBlocks(blocks) {
+  assert.ok(Number.isInteger(blocks) && blocks > 0, `invalid wait block count: ${blocks}`);
+
+  const start = await currentBlockNumber();
+  const target = start + blocks;
+  console.log("waiting without user action:", `start_block=${start}`, `target_block=${target}`);
+
+  while ((await currentBlockNumber()) < target) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 }
 
 function stakeAddedFromEvents(events, hotkey, netuid) {
