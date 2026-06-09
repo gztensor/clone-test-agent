@@ -13,6 +13,11 @@ const MINIMUM_BUY_SEARCH_WINDOW = 100n;
 const SWAP_MINIMUM_RESERVE = 1_000_000n;
 const MAX_PRICE = 18_446_744_073_709_551_615n;
 const LONG_TERM_WAIT_BLOCKS = Number(process.env.LONG_TERM_WAIT_BLOCKS ?? 30);
+const ROOT_STAKE_TAO = 200_000_000n;
+const LOCAL_VALIDATOR_ALPHA = 10_000_000n;
+const ROOT_ALPHA_DIVIDEND_TARGET = BigInt(process.env.ROOT_ALPHA_DIVIDEND_TARGET ?? 800_000);
+const NORMALIZED_TAO_RESERVE = 10_000_000_000n;
+const I96F32_ONE = 1n << 32n;
 
 const keyring = new Keyring({ type: "sr25519" });
 const alice = keyring.addFromUri("//Alice");
@@ -44,6 +49,12 @@ async function main() {
 
     const netuid = await registerSubnet();
     await enableSubtoken(netuid);
+    await setupEmissionAndRootClaimFixture(netuid);
+    const rootDividendsBeforeDrain = await waitForRootAlphaDividends(netuid, ROOT_ALPHA_DIVIDEND_TARGET);
+    console.log("root alpha dividends before drain:", rootDividendsBeforeDrain.toString());
+    await pauseSubnetEmissions(netuid);
+    await normalizePoolForDrain(netuid);
+
     const initial = await readReserves(netuid);
     console.log("created netuid:", netuid);
     console.log("initial reserves:", formatReserves(initial));
@@ -72,6 +83,28 @@ async function main() {
     );
     console.log("post-drain buy rejected with reserve error:", `alpha_in=${afterDrain.alphaIn}`);
 
+    const rootClaimedBeforeAuto = await readRootClaimed(netuid);
+    await submitAndWait(alice, api.tx.sudo.sudo(api.tx.subtensorModule.sudoSetNumRootClaims(1)), "enable auto root claim");
+    let rootClaimMode = "auto";
+    let rootClaimedAfterAuto = await waitForRootClaimedIncrease(netuid, rootClaimedBeforeAuto, 12);
+    if (rootClaimedAfterAuto === null) {
+      console.log("auto root claim did not advance root claimed; submitting explicit claim_root");
+      rootClaimMode = "manual";
+      await submitAndWait(alice, api.tx.subtensorModule.claimRoot([netuid]), "claim_root");
+      rootClaimedAfterAuto = await readRootClaimed(netuid);
+      assert.ok(rootClaimedAfterAuto > rootClaimedBeforeAuto, "manual claim_root did not increase RootClaimed");
+    }
+    const afterAutoClaim = await readReserves(netuid);
+    console.log(
+      "root claim happened:",
+      `mode=${rootClaimMode}`,
+      `root_claimed_before=${rootClaimedBeforeAuto}`,
+      `root_claimed_after=${rootClaimedAfterAuto}`,
+      formatReserves(afterAutoClaim)
+    );
+
+    const rootClaimRestoredReserve = await checkPostRootClaimBuy(netuid, afterAutoClaim);
+
     const waitStart = await currentBlockNumber();
     await waitForBlocks(LONG_TERM_WAIT_BLOCKS);
     const waitEnd = await currentBlockNumber();
@@ -83,17 +116,25 @@ async function main() {
       `waited_blocks=${waitEnd - waitStart}`,
       formatReserves(afterWait)
     );
-    assert.ok(
-      afterWait.alphaIn < SWAP_MINIMUM_RESERVE,
-      `expected alpha reserve to stay below ${SWAP_MINIMUM_RESERVE} without user action, got ${afterWait.alphaIn}`
-    );
+    if (rootClaimRestoredReserve) {
+      assert.ok(
+        afterWait.alphaIn >= SWAP_MINIMUM_RESERVE,
+        `expected auto root claim recovery to persist above ${SWAP_MINIMUM_RESERVE}, got ${afterWait.alphaIn}`
+      );
+      console.log("post-wait reserve remains above minimum after root claim:", `alpha_in=${afterWait.alphaIn}`);
+    } else {
+      assert.ok(
+        afterWait.alphaIn < SWAP_MINIMUM_RESERVE,
+        `expected alpha reserve to stay below ${SWAP_MINIMUM_RESERVE} without user action, got ${afterWait.alphaIn}`
+      );
 
-    await expectDispatchError(
-      api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, netuid, MIN_STAKE_TAO, MAX_PRICE, false),
-      "buy after waiting without user action",
-      "ReservesTooLow"
-    );
-    console.log("post-wait buy still rejected with reserve error:", `alpha_in=${afterWait.alphaIn}`);
+      await expectDispatchError(
+        api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, netuid, MIN_STAKE_TAO, MAX_PRICE, false),
+        "buy after waiting without user action",
+        "ReservesTooLow"
+      );
+      console.log("post-wait buy still rejected with reserve error:", `alpha_in=${afterWait.alphaIn}`);
+    }
     console.log("localnet subnet alpha reserve drain: ok");
   } finally {
     await api?.disconnect();
@@ -111,8 +152,12 @@ function assertMetadataAvailable() {
   const missing = [
     ["Sudo.sudo", api.tx.sudo?.sudo],
     ["System.setStorage", api.tx.system?.setStorage],
+    ["Balances.forceSetBalance", api.tx.balances?.forceSetBalance],
     ["SubtensorModule.registerNetwork", api.tx.subtensorModule?.registerNetwork],
+    ["SubtensorModule.rootRegister", api.tx.subtensorModule?.rootRegister],
     ["SubtensorModule.addStakeLimit", api.tx.subtensorModule?.addStakeLimit],
+    ["SubtensorModule.claimRoot", api.tx.subtensorModule?.claimRoot],
+    ["SubtensorModule.sudoSetNumRootClaims", api.tx.subtensorModule?.sudoSetNumRootClaims],
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
     ["SubtensorModule.SubnetAlphaOut", api.query.subtensorModule?.subnetAlphaOut],
@@ -124,6 +169,15 @@ function assertMetadataAvailable() {
     ["SubtensorModule.NetworkLastLockCost", api.query.subtensorModule?.networkLastLockCost],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
     ["SubtensorModule.SubtokenEnabled", api.query.subtensorModule?.subtokenEnabled],
+    ["SubtensorModule.FirstEmissionBlockNumber", api.query.subtensorModule?.firstEmissionBlockNumber],
+    ["SubtensorModule.Tempo", api.query.subtensorModule?.tempo],
+    ["SubtensorModule.TaoWeight", api.query.subtensorModule?.taoWeight],
+    ["SubtensorModule.SubnetMovingPrice", api.query.subtensorModule?.subnetMovingPrice],
+    ["SubtensorModule.SubnetEmissionEnabled", api.query.subtensorModule?.subnetEmissionEnabled],
+    ["SubtensorModule.NetworkRegistrationAllowed", api.query.subtensorModule?.networkRegistrationAllowed],
+    ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
+    ["SubtensorModule.RootAlphaDividendsPerSubnet", api.query.subtensorModule?.rootAlphaDividendsPerSubnet],
+    ["SubtensorModule.RootClaimed", api.query.subtensorModule?.rootClaimed],
   ].filter(([, value]) => !value);
 
   assert.equal(missing.length, 0, `missing metadata: ${missing.map(([name]) => name).join(", ")}`);
@@ -175,29 +229,122 @@ async function registerSubnet() {
   return netuid;
 }
 
+async function setupEmissionAndRootClaimFixture(netuid) {
+  const block = await currentBlockNumber();
+  const entries = [
+    [api.query.subtensorModule.subtokenEnabled.key(0), storageValueHex("bool", true)],
+    [api.query.subtensorModule.firstEmissionBlockNumber.key(netuid), storageValueHex("Option<u64>", block)],
+    [api.query.subtensorModule.tempo.key(netuid), storageValueHex("u16", 1)],
+    [api.query.subtensorModule.taoWeight.key(), storageValueHex("u64", MAX_PRICE)],
+    [api.query.subtensorModule.subnetMovingPrice.key(netuid), storageValueHex("i128", 2n * I96F32_ONE)],
+    [api.query.subtensorModule.subnetEmissionEnabled.key(netuid), storageValueHex("bool", true)],
+    [api.query.subtensorModule.networkRegistrationAllowed.key(netuid), storageValueHex("bool", true)],
+    [api.query.subtensorModule.totalHotkeyAlpha.key(ownerHotkey.address, netuid), storageValueHex("u64", LOCAL_VALIDATOR_ALPHA)],
+  ];
+
+  await submitAndWait(alice, api.tx.sudo.sudo(api.tx.system.setStorage(entries)), "sudo setup emissions");
+  await submitAndWait(alice, api.tx.sudo.sudo(api.tx.subtensorModule.sudoSetNumRootClaims(0)), "disable auto root claim");
+  await submitAndWait(alice, api.tx.subtensorModule.rootRegister(ownerHotkey.address), "rootRegister");
+
+  const rootStakeResult = await submitAndWait(
+    alice,
+    api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, 0, ROOT_STAKE_TAO, MAX_PRICE, false),
+    "add root stake"
+  );
+  const rootAlpha = stakeAddedFromEvents(rootStakeResult.events, ownerHotkey.address, 0);
+  console.log(
+    "emission/root-claim fixture:",
+    `first_emission_block=${block}`,
+    `root_stake_tao=${ROOT_STAKE_TAO}`,
+    `root_alpha=${rootAlpha}`,
+    `local_validator_alpha=${LOCAL_VALIDATOR_ALPHA}`,
+    `auto_claim=disabled`
+  );
+}
+
+async function pauseSubnetEmissions(netuid) {
+  await submitAndWait(
+    alice,
+    api.tx.sudo.sudo(
+      api.tx.system.setStorage([
+        [api.query.subtensorModule.networkRegistrationAllowed.key(netuid), storageValueHex("bool", false)],
+      ])
+    ),
+    "pause subnet emissions"
+  );
+  console.log("subnet emissions paused:", netuid);
+}
+
+async function normalizePoolForDrain(netuid) {
+  const subnetAccount = await getSubnetAccountId(netuid);
+  await submitAndWait(
+    alice,
+    api.tx.sudo.sudo(
+      api.tx.system.setStorage([
+        [api.query.subtensorModule.subnetTAO.key(netuid), storageValueHex("u64", NORMALIZED_TAO_RESERVE)],
+        [api.query.subtensorModule.subnetAlphaIn.key(netuid), storageValueHex("u64", SWAP_MINIMUM_RESERVE)],
+      ])
+    ),
+    "normalize pool reserves before drain"
+  );
+  await submitAndWait(
+    alice,
+    api.tx.sudo.sudo(api.tx.balances.forceSetBalance(subnetAccount, NORMALIZED_TAO_RESERVE)),
+    "fund subnet account for root claim"
+  );
+  console.log("pool reserves normalized before drain:", formatReserves(await readReserves(netuid)));
+  console.log("subnet account funded:", `account=${subnetAccount}`, `free=${NORMALIZED_TAO_RESERVE}`);
+}
+
+async function getSubnetAccountId(netuid) {
+  const encoded = await api._rpcCore.provider.send("subnetInfo_getSubnetAccountId", [netuid, null]);
+  const account = api.createType("Option<AccountId32>", Uint8Array.from(encoded));
+  assert.ok(account.isSome, `subnet account id not found for netuid ${netuid}`);
+  return account.unwrap().toString();
+}
+
 async function executeSmallestAcceptedBuy(netuid) {
   const sim = await simSwapTaoForAlpha(netuid, MIN_STAKE_TAO);
   const simulatedMinimum = MIN_STAKE_TAO + sim.taoFee;
+  const reserves = await readReserves(netuid);
+  const targetAlphaOut = reserves.alphaIn - SWAP_MINIMUM_RESERVE + 1n;
   const rejected = [];
-  const firstAttempt = simulatedMinimum > 2n ? simulatedMinimum - 2n : MIN_STAKE_TAO;
-  const maxAttempt = simulatedMinimum + MINIMUM_BUY_SEARCH_WINDOW;
+  const firstRejectedAttempt = simulatedMinimum > 2n ? simulatedMinimum - 2n : MIN_STAKE_TAO;
+  let low = simulatedMinimum;
+  let high = simulatedMinimum;
 
   console.log(
     "minimum buy simulation:",
     `tao_amount=${sim.taoAmount}`,
     `alpha_amount=${sim.alphaAmount}`,
     `tao_fee=${sim.taoFee}`,
-    `simulated_minimum=${simulatedMinimum}`
+    `simulated_minimum=${simulatedMinimum}`,
+    `target_alpha_out=${targetAlphaOut}`
   );
 
-  for (let amount = firstAttempt; amount <= maxAttempt; amount += 1n) {
+  while ((await simSwapTaoForAlpha(netuid, high)).alphaAmount < targetAlphaOut) {
+    high *= 2n;
+  }
+
+  while (low < high) {
+    const mid = (low + high) / 2n;
+    const midSim = await simSwapTaoForAlpha(netuid, mid);
+    if (midSim.alphaAmount >= targetAlphaOut) {
+      high = mid;
+    } else {
+      low = mid + 1n;
+    }
+  }
+
+  const drainAmount = low;
+  for (let amount = firstRejectedAttempt; amount < simulatedMinimum; amount += 1n) {
     try {
-      const result = await submitAndWait(
+      await submitAndWait(
         alice,
         api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, netuid, amount, MAX_PRICE, false),
         `buy candidate ${amount} rao`
       );
-      return { amount, result, rejected };
+      throw new Error(`buy candidate ${amount} unexpectedly passed below simulated minimum ${simulatedMinimum}`);
     } catch (error) {
       if (!/\bAmountTooLow\b/.test(error.message)) {
         throw error;
@@ -206,9 +353,12 @@ async function executeSmallestAcceptedBuy(netuid) {
     }
   }
 
-  throw new Error(
-    `no accepted buy found between ${firstAttempt} and ${maxAttempt} rao; rejected=${rejected.join(",")}`
+  const result = await submitAndWait(
+    alice,
+    api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, netuid, drainAmount, MAX_PRICE, false),
+    `minimum drain buy ${drainAmount} rao`
   );
+  return { amount: drainAmount, result, rejected };
 }
 
 async function simSwapTaoForAlpha(netuid, tao) {
@@ -260,6 +410,67 @@ async function readReserves(netuid) {
     alphaIn: alphaIn.toBigInt(),
     alphaOut: alphaOut.toBigInt(),
   };
+}
+
+async function readRootClaimed(netuid) {
+  return (await api.query.subtensorModule.rootClaimed(netuid, ownerHotkey.address, alice.address)).toBigInt();
+}
+
+async function readRootAlphaDividends(netuid) {
+  return (await api.query.subtensorModule.rootAlphaDividendsPerSubnet(netuid, ownerHotkey.address)).toBigInt();
+}
+
+async function waitForRootAlphaDividends(netuid, minimum) {
+  const start = await currentBlockNumber();
+  const target = start + 60;
+  console.log("waiting for root alpha dividends:", `start_block=${start}`, `target_minimum=${minimum}`);
+
+  while ((await currentBlockNumber()) < target) {
+    const dividends = await readRootAlphaDividends(netuid);
+    if (dividends >= minimum) {
+      console.log("root alpha dividends reached:", `block=${await currentBlockNumber()}`, `amount=${dividends}`);
+      return dividends;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error(`root alpha dividends did not reach ${minimum}; current=${await readRootAlphaDividends(netuid)}`);
+}
+
+async function waitForRootClaimedIncrease(netuid, previous, blocks) {
+  const start = await currentBlockNumber();
+  const target = start + blocks;
+  console.log("waiting for auto root claim:", `start_block=${start}`, `target_block=${target}`);
+
+  while ((await currentBlockNumber()) < target) {
+    const claimed = await readRootClaimed(netuid);
+    if (claimed > previous) {
+      return claimed;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return null;
+}
+
+async function checkPostRootClaimBuy(netuid, reserves) {
+  if (reserves.alphaIn >= SWAP_MINIMUM_RESERVE) {
+    console.log("root claim restored alpha reserve above minimum:", `alpha_in=${reserves.alphaIn}`);
+    return true;
+  }
+
+  try {
+    await submitAndWait(
+        alice,
+        api.tx.subtensorModule.addStakeLimit(ownerHotkey.address, netuid, MIN_STAKE_TAO, MAX_PRICE, false),
+        "buy after auto root claim"
+      );
+    throw new Error(`buy after auto root claim unexpectedly succeeded with alpha_in=${reserves.alphaIn}`);
+  } catch (error) {
+    assert.match(error.message, /\bReservesTooLow\b/);
+    console.log("post-root-claim buy still rejected with reserve error:", `alpha_in=${reserves.alphaIn}`);
+    return false;
+  }
 }
 
 async function currentBlockNumber() {
