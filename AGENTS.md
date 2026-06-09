@@ -159,3 +159,10 @@ Final verification rule:
 - Use the endpoint: `wss://bittensor-finney.api.onfinality.io/ws?apikey=<api_key>`
 - Use ONFINALITY_API_KEY from .env file to replace <api_key> placeholder
 - Do not test with real balances, so any tests will be read-only
+
+## Testing on a localnet with fresh start
+
+- Start the local network using `./bittensor-reference/scripts/localnet.sh`
+- Use endpoint `ws://127.0.0.1:9944`
+- Alice is sudo
+
