@@ -148,6 +148,8 @@ function assertLockMetadataAvailable() {
     ["SubtensorModule.UnlockRate", api.query.subtensorModule?.unlockRate],
     ["SubtensorModule.MaturityRate", api.query.subtensorModule?.maturityRate],
     ["SubtensorModule.AlphaV2", api.query.subtensorModule?.alphaV2],
+    ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
+    ["SubtensorModule.TotalHotkeySharesV2", api.query.subtensorModule?.totalHotkeySharesV2],
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
     ["SubtensorModule.TransferToggle", api.query.subtensorModule?.transferToggle],
     ["Swap.PalSwapInitialized or Swap.SwapV3Initialized", initializedSubnetStorage()],
@@ -260,8 +262,55 @@ async function hasPerpetualFlag(coldkey, netuid) {
 }
 
 async function readPairStake(hotkey, coldkey, netuid) {
-  const alphaV2 = await api.query.subtensorModule.alphaV2(hotkey, coldkey, netuid);
-  return decodeFixedDecimal(alphaV2);
+  const [share, totalHotkeyStake, totalHotkeyShares] = await Promise.all([
+    readAlphaShare(hotkey, coldkey, netuid),
+    api.query.subtensorModule.totalHotkeyAlpha(hotkey, netuid),
+    readTotalHotkeyShares(hotkey, netuid),
+  ]);
+
+  return fixedMulDivToBigInt(share, totalHotkeyStake.toBigInt(), totalHotkeyShares);
+}
+
+async function readAlphaShare(hotkey, coldkey, netuid) {
+  if (api.query.subtensorModule?.alpha) {
+    const legacyShare = await readOptionalStorage(
+      api.query.subtensorModule.alpha,
+      hotkey,
+      coldkey,
+      netuid
+    );
+    if (legacyShare) {
+      return decodeFixedRational(legacyShare);
+    }
+  }
+
+  const shareV2 = await api.query.subtensorModule.alphaV2(hotkey, coldkey, netuid);
+  return decodeFixedRational(shareV2);
+}
+
+async function readTotalHotkeyShares(hotkey, netuid) {
+  if (api.query.subtensorModule?.totalHotkeyShares) {
+    const legacyShares = await readOptionalStorage(
+      api.query.subtensorModule.totalHotkeyShares,
+      hotkey,
+      netuid
+    );
+    if (legacyShares) {
+      return decodeFixedRational(legacyShares);
+    }
+  }
+
+  const sharesV2 = await api.query.subtensorModule.totalHotkeySharesV2(hotkey, netuid);
+  return decodeFixedRational(sharesV2);
+}
+
+async function readOptionalStorage(query, ...args) {
+  const storageKey = query.key(...args);
+  const storage = await api.rpc.state.getStorage(storageKey);
+  if (!storage || storage.isNone || storage.isEmpty || storage.unwrap?.().isEmpty) {
+    return undefined;
+  }
+  return query(...args);
 }
 
 function decodeLockState(lockState) {
@@ -305,16 +354,36 @@ function parseBigIntish(value) {
   throw new Error(`could not decode conviction bits from ${value}`);
 }
 
-function decodeFixedDecimal(value) {
+function decodeFixedRational(value) {
   const human = value.toHuman?.();
-  const mantissa = parseBigIntish(human?.mantissa ?? structField(value, "mantissa").toString());
-  const exponent = Number(String(human?.exponent ?? structField(value, "exponent").toString()).replaceAll(",", ""));
-
-  if (exponent >= 0) {
-    return mantissa * 10n ** BigInt(exponent);
+  if (human?.mantissa !== undefined || value.mantissa !== undefined || value.get?.("mantissa")) {
+    const mantissa = parseBigIntish(human?.mantissa ?? structField(value, "mantissa").toString());
+    const exponent = Number(
+      String(human?.exponent ?? structField(value, "exponent").toString()).replaceAll(",", "")
+    );
+    return rationalFromDecimalExponent(mantissa, exponent);
   }
 
-  return mantissa / 10n ** BigInt(-exponent);
+  const bits = value.toBigInt ? value.toBigInt() : parseBigIntish(value.toString());
+  return { numerator: bits, denominator: 1n << 64n };
+}
+
+function rationalFromDecimalExponent(mantissa, exponent) {
+  if (exponent >= 0) {
+    return { numerator: mantissa * 10n ** BigInt(exponent), denominator: 1n };
+  }
+
+  return { numerator: mantissa, denominator: 10n ** BigInt(-exponent) };
+}
+
+function fixedMulDivToBigInt(multiplier, value, divisor) {
+  assert.ok(divisor.numerator > 0n, "total hotkey shares must be positive");
+  return (
+    multiplier.numerator *
+    value *
+    divisor.denominator /
+    (multiplier.denominator * divisor.numerator)
+  );
 }
 
 function structField(value, ...names) {
