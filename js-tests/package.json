@@ -5,6 +5,7 @@
     "patch:dev-chainspec": "node scripts/patch-dev-chainspec.js",
     "runtime:update:alice": "node scripts/update-runtime-with-alice.js",
     "test:balancer-operation": "node tests/test-balancer-operation.js",
+    "test:balancer-edge-emission-issuance": "node tests/test-balancer-edge-emission-issuance.js",
     "test:total-issuance-trackers": "node tests/test-total-issuance-trackers.js",
     "test:net-tao-flow-emission-allocation": "node tests/test-net-tao-flow-emission-allocation.js",
     "test:locks-conviction": "node tests/test-locks-conviction.js",
