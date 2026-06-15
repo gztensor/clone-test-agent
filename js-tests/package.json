@@ -20,7 +20,8 @@
     "test:testnet-hotkey-conviction": "node tests/testnet-hotkey-conviction-read.js",
     "test:testnet-unlock-rate": "node tests/testnet-unlock-rate-read.js",
     "test:testnet-maturity-rate": "node tests/testnet-maturity-rate-read.js",
-    "test:hotkey-swap-and-proxy-stake": "node tests/test-hotkey-swap-and-proxy-stake.js"
+    "test:hotkey-swap-and-proxy-stake": "node tests/test-hotkey-swap-and-proxy-stake.js",
+    "test:proxy-filter-security-regressions": "node tests/test-proxy-filter-security-regressions.js"
   },
   "dependencies": {
     "@polkadot/api": "^16.4.9",
