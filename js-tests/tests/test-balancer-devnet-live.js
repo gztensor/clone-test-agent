@@ -7,14 +7,15 @@ import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "wss://dev.chain.opentensor.ai:443";
 const RUN_ID = process.env.DEVNET_BALANCER_RUN_ID ?? `run${Date.now()}p${process.pid}`;
-const FUND_SOURCE_URI = process.env.DEVNET_BALANCER_FUND_SOURCE_URI ?? "//Alice";
+const EXISTING_NETUID = process.env.DEVNET_BALANCER_NETUID ? Number(process.env.DEVNET_BALANCER_NETUID) : null;
+const FUND_SOURCE_URI = process.env.DEVNET_BALANCER_FUND_SOURCE_URI ?? "//TestnetFunded";
 const OWNER_URI = process.env.DEVNET_BALANCER_OWNER_URI ?? `//DevnetBalancer//${RUN_ID}//owner`;
 const OWNER_HOTKEY_URI =
   process.env.DEVNET_BALANCER_OWNER_HOTKEY_URI ?? `//DevnetBalancer//${RUN_ID}//owner-hotkey`;
 const STAKER_URI = process.env.DEVNET_BALANCER_STAKER_URI ?? `//DevnetBalancer//${RUN_ID}//staker`;
 const STAKE_AMOUNT = BigInt(process.env.DEVNET_BALANCER_STAKE_AMOUNT ?? "1000000000");
 const STAKER_FUND_AMOUNT = BigInt(process.env.DEVNET_BALANCER_STAKER_FUND_AMOUNT ?? "5000000000");
-const OWNER_EXTRA_FUND_AMOUNT = BigInt(process.env.DEVNET_BALANCER_OWNER_EXTRA_FUND_AMOUNT ?? "5000000000");
+const OWNER_EXTRA_FUND_AMOUNT = BigInt(process.env.DEVNET_BALANCER_OWNER_EXTRA_FUND_AMOUNT ?? "100000000000");
 const MAX_PRICE = 18_446_744_073_709_551_615n;
 const MIN_PRICE = 0n;
 const RAO_PER_TAO = 1_000_000_000n;
@@ -49,15 +50,22 @@ async function main() {
     console.log("staker:", staker.address);
 
     assertMetadataAvailable();
-    await assertLiveDevnetFundingAvailable();
-    await fundTestAccounts();
+    if (EXISTING_NETUID === null) {
+      await assertLiveDevnetFundingAvailable();
+      await fundTestAccounts();
+    } else {
+      console.log("using existing devnet subnet:", EXISTING_NETUID);
+    }
 
-    const netuid = await registerSubnet();
-    console.log("registered devnet subnet:", netuid);
+    const netuid = EXISTING_NETUID ?? (await registerSubnet());
+    if (EXISTING_NETUID === null) {
+      console.log("registered devnet subnet:", netuid);
+    }
 
     const initial = await assertBalancerPrice(netuid, "after registerNetwork");
     assert.ok(initial.tao > 0n, `fresh subnet ${netuid} has zero SubnetTAO reserve`);
     assert.ok(initial.alpha > 0n, `fresh subnet ${netuid} has zero SubnetAlphaIn reserve`);
+    await ensureSubtokenEnabled(netuid);
 
     const addSim = await simSwapTaoForAlpha(netuid, STAKE_AMOUNT);
     console.log("sim swap tao for alpha before addStakeLimit:", formatSimSwap(addSim));
@@ -72,6 +80,11 @@ async function main() {
       `addStakeLimit did not decrease alpha reserve: ${initial.alpha}->${afterAdd.alpha}`
     );
     assert.ok(afterAdd.price >= initial.price, `buying alpha should not lower price: ${initial.price}->${afterAdd.price}`);
+    assert.equal(
+      afterAdd.quoteWeight,
+      initial.quoteWeight,
+      `staking swap changed balancer quote weight: ${initial.quoteWeight}->${afterAdd.quoteWeight}`
+    );
 
     const removeAmount = addedAlpha / 2n;
     assert.ok(removeAmount > 0n, "added alpha was too small to test removeStakeLimit");
@@ -93,6 +106,11 @@ async function main() {
     assert.ok(
       afterRemove.price <= afterAdd.price,
       `selling alpha should not raise price: ${afterAdd.price}->${afterRemove.price}`
+    );
+    assert.equal(
+      afterRemove.quoteWeight,
+      afterAdd.quoteWeight,
+      `unstaking swap changed balancer quote weight: ${afterAdd.quoteWeight}->${afterRemove.quoteWeight}`
     );
 
     console.log(
@@ -122,8 +140,10 @@ function assertMetadataAvailable() {
     ["SubtensorModule.registerNetwork", api.tx.subtensorModule?.registerNetwork],
     ["SubtensorModule.addStakeLimit", api.tx.subtensorModule?.addStakeLimit],
     ["SubtensorModule.removeStakeLimit", api.tx.subtensorModule?.removeStakeLimit],
+    ["SubtensorModule.startCall", api.tx.subtensorModule?.startCall],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
     ["SubtensorModule.NetworkLastLockCost", api.query.subtensorModule?.networkLastLockCost],
+    ["SubtensorModule.SubtokenEnabled", api.query.subtensorModule?.subtokenEnabled],
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
     ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
@@ -175,6 +195,19 @@ async function registerSubnet() {
   const netuid = event.event.data[0].toNumber();
   assert.equal((await api.query.subtensorModule.networksAdded(netuid)).isTrue, true, `netuid ${netuid} was not added`);
   return netuid;
+}
+
+async function ensureSubtokenEnabled(netuid) {
+  const before = await api.query.subtensorModule.subtokenEnabled(netuid);
+  if (before.isTrue) {
+    console.log("subtoken already enabled:", netuid);
+    return;
+  }
+
+  await submitAndWait(owner, api.tx.subtensorModule.startCall(netuid), "startCall");
+  const after = await api.query.subtensorModule.subtokenEnabled(netuid);
+  assert.equal(after.isTrue, true, `startCall did not enable subtoken for netuid ${netuid}`);
+  console.log("subtoken enabled with startCall:", netuid);
 }
 
 async function addStake(netuid) {
@@ -250,11 +283,11 @@ async function currentAlphaPriceRpc(netuid) {
 }
 
 async function simSwapTaoForAlpha(netuid, amount) {
-  return api._rpcCore.provider.send("swap_simSwapTaoForAlpha", [netuid, amount.toString(), null]);
+  return api._rpcCore.provider.send("swap_simSwapTaoForAlpha", [netuid, Number(amount), null]);
 }
 
 async function simSwapAlphaForTao(netuid, amount) {
-  return api._rpcCore.provider.send("swap_simSwapAlphaForTao", [netuid, amount.toString(), null]);
+  return api._rpcCore.provider.send("swap_simSwapAlphaForTao", [netuid, Number(amount), null]);
 }
 
 function weightedBalancerPrice({ tao, alpha, quoteWeight }) {
@@ -326,10 +359,15 @@ function readSimAmount(value, names) {
 }
 
 function formatSimSwap(value) {
-  return JSON.stringify(normalizeRpcObject(value));
+  return JSON.stringify(normalizeRpcObject(value), (_key, item) =>
+    typeof item === "bigint" ? item.toString() : item
+  );
 }
 
 function normalizeRpcObject(value) {
+  if (Array.isArray(value)) {
+    return decodeSimSwapBytes(value);
+  }
   if (value && typeof value.toJSON === "function") {
     return value.toJSON();
   }
@@ -339,7 +377,32 @@ function normalizeRpcObject(value) {
   return { value: value?.toString?.() ?? String(value) };
 }
 
+function decodeSimSwapBytes(bytes) {
+  assert.ok(bytes.length >= 32, `sim swap result was ${bytes.length} bytes, expected at least 32`);
+  return {
+    amountPaidIn: readLittleEndianU64(bytes, 0),
+    amountPaidOut: readLittleEndianU64(bytes, 8),
+    feePaid: readLittleEndianU64(bytes, 16),
+    feeToBlockAuthor: readLittleEndianU64(bytes, 24),
+  };
+}
+
+function readLittleEndianU64(bytes, offset) {
+  let value = 0n;
+  for (let index = 7; index >= 0; index--) {
+    value = (value << 8n) + BigInt(bytes[offset + index]);
+  }
+  return value;
+}
+
 async function networkLockCost() {
+  try {
+    const value = await api._rpcCore.provider.send("subnetInfo_getLockCost", []);
+    return BigInt(value.toString());
+  } catch {
+    // Older/local runtimes may not expose the registration lock-cost RPC.
+  }
+
   return (await api.query.subtensorModule.networkLastLockCost()).toBigInt();
 }
 
