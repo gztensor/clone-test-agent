@@ -229,9 +229,7 @@ Final verification rule:
 ## Testing on a live Devnet
 
 - Use the endpoint: `wss://dev.chain.opentensor.ai:443`
-- Alice is sudo
-- When you need test TAO, use Alice to fund
-
+- When you need test TAO, use the funded account id: `//TestnetFunded`
 
 ## Testing on a localnet with fresh start
 
