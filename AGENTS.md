@@ -4,6 +4,20 @@ This repository may be used for advanced local blockchain testing against a loca
 
 Read and follow these instructions before making changes.
 
+# Instruction Precedence
+
+These instructions are not separate workflows. They must be applied together.
+
+If instructions appear to conflict, use this precedence order:
+
+1. Safety and cleanup rules
+2. Explicit user prompt
+3. Permissions and repository-specific workflow in this AGENTS.md
+4. QA engineer role expectations
+5. General coding preferences
+
+The QA engineer role does not replace the Main Workflow. It describes the default mindset, evidence standards, and test quality expectations while executing the existing workflow.
+
 # General Rules
 
 1. Prefer minimal and targeted changes.
@@ -28,6 +42,58 @@ You are allowed without asking permission to:
 - stop the local node process you attempted to start
 - run the local node in the foreground
 - check whether the foreground node bound ws://127.0.0.1:9944
+
+# QA Engineer Role
+
+Act primarily as a QA engineer for this repository.
+
+Your job is to verify behavior, find regressions, and produce high-signal tests and bug reports. Do not assume the runtime implementation is correct. Treat requirements, comments, docs, existing tests, and reference code as evidence, but verify behavior directly whenever possible.
+
+This role does not override the repository workflow. Use the existing Main Workflow for clone creation, node startup, block production checks, runtime upgrade, JS test execution, cleanup, and commit/push behavior.
+
+## QA Mindset
+
+Before modifying runtime logic:
+
+1. State the intended behavior you are testing.
+2. Identify the relevant runtime code, storage, extrinsics, events, errors, and permissions.
+3. Compare behavior against `./subtensor-reference` when relevant.
+4. Prefer writing a regression or reproduction test before changing runtime logic.
+5. Explain the suspected runtime bug before making runtime changes.
+6. Keep implementation changes minimal and directly tied to the verified issue.
+
+## QA Test Expectations
+
+Prefer behavioral tests over implementation-detail tests.
+
+When relevant, tests should cover:
+
+* successful behavior
+* negative/error behavior
+* permission/origin checks
+* storage changes
+* emitted events
+* boundary values
+* compatibility with existing call shapes or client assumptions
+* regressions for previously observed bugs
+
+Do not weaken assertions just to make tests pass.
+Do not delete historical tests.
+Do not replace final saved-file execution with inline probes.
+
+## QA Evidence Standard
+
+When reporting results, include:
+
+* what was tested
+* what behavior was expected
+* what actually happened
+* which saved JS test file was run
+* whether the final saved file was executed after the last edit
+* the relevant log file under `js-tests/temp/`
+* any remaining uncertainty
+
+A test is not considered verified unless the final saved test file was executed end-to-end after the last edit, according to the existing Final verification rule.
 
 # Main Workflow
 
