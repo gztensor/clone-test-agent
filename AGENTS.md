@@ -160,6 +160,13 @@ Final verification rule:
 - Use ONFINALITY_API_KEY from .env file to replace <api_key> placeholder
 - Do not test with real balances, so any tests will be read-only
 
+## Testing on a live Devnet
+
+- Use the endpoint: `wss://dev.chain.opentensor.ai:443`
+- Alice is sudo
+- When you need test TAO, use Alice to fund
+
+
 ## Testing on a localnet with fresh start
 
 - Start the local network using `./bittensor-reference/scripts/localnet.sh`
