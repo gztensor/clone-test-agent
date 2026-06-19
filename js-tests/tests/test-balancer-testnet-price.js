@@ -7,7 +7,8 @@ import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "wss://test.finney.opentensor.ai:443";
 const EXPECTED_RUNTIME = Number(process.env.EXPECTED_RUNTIME ?? 420);
-const FUNDED_URI = process.env.TESTNET_BALANCER_FUNDED_URI ?? "//TestnetFunded";
+const IS_LOCAL_CLONE = /^ws:\/\/(127\.0\.0\.1|localhost):9944\b/.test(WS_ENDPOINT);
+const FUNDED_URI = process.env.TESTNET_BALANCER_FUNDED_URI ?? (IS_LOCAL_CLONE ? "//Alice" : "//TestnetFunded");
 const HOTKEY_URI = process.env.TESTNET_BALANCER_HOTKEY_URI ?? `${FUNDED_URI}//balancer-price-hotkey`;
 const STAKE_AMOUNT = BigInt(process.env.TESTNET_BALANCER_STAKE_AMOUNT ?? "1000000000");
 const MAX_PRICE = 18_446_744_073_709_551_615n;

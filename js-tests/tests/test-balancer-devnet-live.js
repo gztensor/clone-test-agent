@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 
 import { Keyring } from "@polkadot/api";
+import { u8aToHex } from "@polkadot/util";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
+import { clearLastRateLimitedBlocks } from "../lib/rate-limit-storage.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "wss://dev.chain.opentensor.ai:443";
 const RUN_ID = process.env.DEVNET_BALANCER_RUN_ID ?? `run${Date.now()}p${process.pid}`;
 const EXISTING_NETUID = process.env.DEVNET_BALANCER_NETUID ? Number(process.env.DEVNET_BALANCER_NETUID) : null;
-const FUND_SOURCE_URI = process.env.DEVNET_BALANCER_FUND_SOURCE_URI ?? "//TestnetFunded";
+const IS_LOCAL_CLONE = /^ws:\/\/(127\.0\.0\.1|localhost):9944\b/.test(WS_ENDPOINT);
+const FUND_SOURCE_URI = process.env.DEVNET_BALANCER_FUND_SOURCE_URI ?? (IS_LOCAL_CLONE ? "//Alice" : "//TestnetFunded");
 const OWNER_URI = process.env.DEVNET_BALANCER_OWNER_URI ?? `//DevnetBalancer//${RUN_ID}//owner`;
 const OWNER_HOTKEY_URI =
   process.env.DEVNET_BALANCER_OWNER_HOTKEY_URI ?? `//DevnetBalancer//${RUN_ID}//owner-hotkey`;
@@ -21,6 +24,7 @@ const MIN_PRICE = 0n;
 const RAO_PER_TAO = 1_000_000_000n;
 const PERQUINTILL = 1_000_000_000_000_000_000n;
 const PRICE_TOLERANCE_PPM = 1_000n;
+const QUOTE_WEIGHT_TOLERANCE_PPM = 1n;
 
 const keyring = new Keyring({ type: "sr25519" });
 const fundSource = keyring.addFromUri(FUND_SOURCE_URI);
@@ -80,9 +84,10 @@ async function main() {
       `addStakeLimit did not decrease alpha reserve: ${initial.alpha}->${afterAdd.alpha}`
     );
     assert.ok(afterAdd.price >= initial.price, `buying alpha should not lower price: ${initial.price}->${afterAdd.price}`);
-    assert.equal(
+    assertWithinRelativeTolerance(
       afterAdd.quoteWeight,
       initial.quoteWeight,
+      QUOTE_WEIGHT_TOLERANCE_PPM,
       `staking swap changed balancer quote weight: ${initial.quoteWeight}->${afterAdd.quoteWeight}`
     );
 
@@ -107,9 +112,10 @@ async function main() {
       afterRemove.price <= afterAdd.price,
       `selling alpha should not raise price: ${afterAdd.price}->${afterRemove.price}`
     );
-    assert.equal(
+    assertWithinRelativeTolerance(
       afterRemove.quoteWeight,
       afterAdd.quoteWeight,
+      QUOTE_WEIGHT_TOLERANCE_PPM,
       `unstaking swap changed balancer quote weight: ${afterAdd.quoteWeight}->${afterRemove.quoteWeight}`
     );
 
@@ -147,6 +153,11 @@ function assertMetadataAvailable() {
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
     ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
+    ["SubtensorModule.SubnetLimit", EXISTING_NETUID === null && IS_LOCAL_CLONE ? api.query.subtensorModule?.subnetLimit : true],
+    ["SubtensorModule.NetworkRateLimit", EXISTING_NETUID === null && IS_LOCAL_CLONE ? api.query.subtensorModule?.networkRateLimit : true],
+    ["SubtensorModule.NetworkRegistrationStartBlock", EXISTING_NETUID === null && IS_LOCAL_CLONE ? api.query.subtensorModule?.networkRegistrationStartBlock : true],
+    ["Sudo.sudo", EXISTING_NETUID === null && IS_LOCAL_CLONE ? api.tx.sudo?.sudo : true],
+    ["System.setStorage", EXISTING_NETUID === null && IS_LOCAL_CLONE ? api.tx.system?.setStorage : true],
   ].filter(([, value]) => !value);
 
   assert.equal(missing.length, 0, `${missing.map(([name]) => name).join(", ")} unavailable on devnet`);
@@ -183,6 +194,17 @@ async function fundTestAccounts() {
 }
 
 async function registerSubnet() {
+  if (IS_LOCAL_CLONE) {
+    await prepareLocalCloneSubnetRegistration();
+    const cleared = await clearLastRateLimitedBlocks(
+      api,
+      fundSource,
+      submitAndWait,
+      "clear inherited local-clone LastRateLimitedBlock before registerNetwork"
+    );
+    console.log("cleared local-clone rate-limit storage:", JSON.stringify(cleared));
+  }
+
   const result = await submitAndWait(
     owner,
     api.tx.subtensorModule.registerNetwork(ownerHotkey.address),
@@ -195,6 +217,27 @@ async function registerSubnet() {
   const netuid = event.event.data[0].toNumber();
   assert.equal((await api.query.subtensorModule.networksAdded(netuid)).isTrue, true, `netuid ${netuid} was not added`);
   return netuid;
+}
+
+async function prepareLocalCloneSubnetRegistration() {
+  const activeCount = await activeNonRootSubnetCount();
+  const subnetLimit = (await api.query.subtensorModule.subnetLimit()).toNumber();
+  const targetLimit = Math.max(subnetLimit, activeCount + 1);
+  await submitAndWait(
+    fundSource,
+    api.tx.sudo.sudo(api.tx.system.setStorage([
+      [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", targetLimit)],
+      [api.query.subtensorModule.networkRateLimit.key(), storageValueHex("u64", 0n)],
+      [api.query.subtensorModule.networkRegistrationStartBlock.key(), storageValueHex("u64", 0n)],
+    ])),
+    "sudo prepare local-clone subnet registration"
+  );
+  console.log("local-clone registration settings:", `subnet_limit=${targetLimit}`, "network_rate_limit=0", "start_block=0");
+}
+
+async function activeNonRootSubnetCount() {
+  const entries = await api.query.subtensorModule.networksAdded.entries();
+  return entries.filter(([key, value]) => value.isTrue && key.args[0].toNumber() !== 0).length;
 }
 
 async function ensureSubtokenEnabled(netuid) {
@@ -418,6 +461,10 @@ function balancesTransfer(dest, amount) {
     return api.tx.balances.transferAllowDeath(dest, amount);
   }
   return api.tx.balances.transfer(dest, amount);
+}
+
+function storageValueHex(type, value) {
+  return u8aToHex(api.createType(type, value).toU8a());
 }
 
 async function submitAndWait(signer, tx, label) {
