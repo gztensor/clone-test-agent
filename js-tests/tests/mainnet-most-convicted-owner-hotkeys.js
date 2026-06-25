@@ -8,7 +8,8 @@ loadDotenv();
 
 const NETWORK = "mainnet";
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? defaultEndpoint();
-const SUBNET_COUNT = Number(process.env.SUBNET_COUNT ?? 128);
+const START_NETUID = Number(process.env.START_NETUID ?? 1);
+const END_NETUID = Number(process.env.END_NETUID ?? 128);
 const logger = createTempLogger("mainnet-most-convicted-owner-hotkeys.log");
 logger.captureConsole();
 
@@ -33,9 +34,9 @@ async function main() {
     console.log("runtime:", runtimeVersion.specName.toString(), runtimeVersion.specVersion.toString());
     console.log("block:", header.number.toString());
     console.log("block hash:", finalizedHash.toString());
-    console.log("subnets checked:", `0..${SUBNET_COUNT - 1}`);
+    console.log("subnets checked:", `${START_NETUID}..${END_NETUID}`);
 
-    for (let netuid = 0; netuid < SUBNET_COUNT; netuid += 1) {
+    for (let netuid = START_NETUID; netuid <= END_NETUID; netuid += 1) {
       const [networkAdded, ownerHotkey, mostConvictedHotkey] = await Promise.all([
         api.query.subtensorModule.networksAdded.at(finalizedHash, netuid),
         api.query.subtensorModule.subnetOwnerHotkey.at(finalizedHash, netuid),
