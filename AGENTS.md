@@ -139,7 +139,7 @@ js-tests/
 ```
 
 Rules:
-1. Use code in `./subtensor-reference` in read-only mode as subject under test.
+1. Use code in `./subtensor-reference` in read-only mode as subject under test. You may `git pull` and `git checkout` in this directory. You may also build it.
 2. Never delete or overwrite tests created in previous sessions.
 3. You may modify tests created during the current session until the current testing goal is achieved.
 4. Prefer creating new files per feature, bug, or investigation.
@@ -213,6 +213,7 @@ Final verification rule:
 ## Building subtensor
 
 - Change directory to `../../subtensor`
+- When asked to check out `main`, `testnet`, `devnet`, or `devnet-ready` branch, also do `git pull` after checkout.
 - Run `cargo build --release --workspace --all-targets`
 
 ## Testing on a live Testnet
