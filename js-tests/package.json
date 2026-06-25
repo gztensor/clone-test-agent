@@ -18,6 +18,7 @@
     "test:subnet-account-balances": "node tests/test-subnet-account-balances.js",
     "test:mainnet-lock-conviction": "node tests/mainnet-lock-conviction-read.js",
     "test:mainnet-most-convicted-owner-hotkeys": "node tests/mainnet-most-convicted-owner-hotkeys.js",
+    "test:mainnet-most-convicted-owner-hotkeys-filtered": "node tests/mainnet-most-convicted-owner-hotkeys-filtered.js",
     "test:mainnet-hotkey-conviction-increases": "node tests/mainnet-hotkey-conviction-increases.js",
     "test:alpha-deprecated-stake-histogram": "node tests/test-alpha-deprecated-stake-histogram.js",
     "test:testnet-lock-conviction": "node tests/testnet-lock-conviction-smoke.js",
