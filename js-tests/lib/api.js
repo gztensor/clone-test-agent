@@ -1,10 +1,14 @@
 import { ApiPromise, WsProvider } from "@polkadot/api";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = Number(process.env.API_CONNECT_TIMEOUT_MS ?? 60_000);
+const DEFAULT_PROVIDER_TIMEOUT_MS = Number(process.env.API_PROVIDER_TIMEOUT_MS ?? 60_000);
 
-export async function connectApi(endpoint, { log = () => {}, timeoutMs = DEFAULT_CONNECT_TIMEOUT_MS } = {}) {
+export async function connectApi(
+  endpoint,
+  { log = () => {}, timeoutMs = DEFAULT_CONNECT_TIMEOUT_MS, providerTimeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS } = {}
+) {
   log(`Connecting to ${endpoint} ...`);
-  const provider = new WsProvider(endpoint);
+  const provider = new WsProvider(endpoint, undefined, {}, providerTimeoutMs);
   let api;
 
   try {

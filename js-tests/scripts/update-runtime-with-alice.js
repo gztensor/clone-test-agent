@@ -9,6 +9,7 @@ import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
+const RUNTIME_UPGRADE_RPC_TIMEOUT_MS = Number(process.env.RUNTIME_UPGRADE_RPC_TIMEOUT_MS ?? 300_000);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -77,7 +78,7 @@ async function submitAndWait(api, signer, tx, label) {
 }
 
 async function connect() {
-  return connectApi(WS_ENDPOINT, { log: console.log });
+  return connectApi(WS_ENDPOINT, { log: console.log, providerTimeoutMs: RUNTIME_UPGRADE_RPC_TIMEOUT_MS });
 }
 
 async function main() {
