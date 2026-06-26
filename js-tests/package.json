@@ -30,7 +30,8 @@
     "test:testnet-maturity-rate": "node tests/testnet-maturity-rate-read.js",
     "test:hotkey-swap-and-proxy-stake": "node tests/test-hotkey-swap-and-proxy-stake.js",
     "test:proxy-filter-security-regressions": "node tests/test-proxy-filter-security-regressions.js",
-    "test:staking-load-block-production": "node tests/test-staking-load-block-production.js"
+    "test:staking-load-block-production": "node tests/test-staking-load-block-production.js",
+    "test:mainnet-block-time-epoch-correlation": "node tests/mainnet-block-time-epoch-correlation.js"
   },
   "dependencies": {
     "@polkadot/api": "^16.4.9",
