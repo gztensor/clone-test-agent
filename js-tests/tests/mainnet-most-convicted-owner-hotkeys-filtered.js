@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
@@ -10,7 +11,9 @@ const NETWORK = "mainnet";
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? defaultEndpoint();
 const START_NETUID = Number(process.env.START_NETUID ?? 1);
 const END_NETUID = Number(process.env.END_NETUID ?? 128);
+const BLOCKS_PER_DAY = 7200n;
 const ONE_YEAR_BLOCKS = 7200n * 365n + 1800n;
+const CSV_REPORT_URL = new URL("../temp/mainnet-most-convicted-owner-hotkeys-filtered.csv", import.meta.url);
 const logger = createTempLogger("mainnet-most-convicted-owner-hotkeys-filtered.log");
 logger.captureConsole();
 
@@ -30,6 +33,7 @@ async function main() {
     const blockNumber = header.number.toBigInt();
     const mismatches = [];
     const excluded = [];
+    const reportRows = [];
     const [networkAddedByNetuid, ownerHotkeyByNetuid, alphaOutByNetuid, registeredAtByNetuid] =
       await Promise.all([
         readNetuidMap(finalizedHash, "networksAdded", (value) => value.isTrue),
@@ -37,6 +41,7 @@ async function main() {
         readNetuidMap(finalizedHash, "subnetAlphaOut", (value) => value.toBigInt()),
         readNetuidMap(finalizedHash, "networkRegisteredAt", (value) => value.toBigInt()),
       ]);
+    const totalAlphaOut = sumActiveAlphaOut(networkAddedByNetuid, alphaOutByNetuid);
 
     console.log("network:", NETWORK);
     console.log("endpoint:", redactEndpoint(WS_ENDPOINT));
@@ -45,6 +50,7 @@ async function main() {
     console.log("block:", blockNumber.toString());
     console.log("block hash:", finalizedHash.toString());
     console.log("subnets checked:", `${START_NETUID}..${END_NETUID}`);
+    console.log("total active SubnetAlphaOut in checked range:", totalAlphaOut.toString());
     console.log("minimum age blocks:", ONE_YEAR_BLOCKS.toString());
     console.log("minimum conviction threshold:", "10% of SubnetAlphaOut");
 
@@ -73,16 +79,33 @@ async function main() {
           mostConvicted,
           convictionBits,
           alphaOut,
+          alphaOutShare: formatShare(alphaOut, totalAlphaOut),
           registeredAt,
           ageBlocks,
+          ageDays: formatAgeDays(ageBlocks),
       };
 
       if (convictionBelowThreshold || registeredLessThanOneYearAgo) {
-        excluded.push({ ...row, convictionBelowThreshold, registeredLessThanOneYearAgo });
+        const excludedRow = { ...row, convictionBelowThreshold, registeredLessThanOneYearAgo };
+        excluded.push(excludedRow);
+        reportRows.push({ ...excludedRow, status: "excluded" });
       } else {
         mismatches.push(row);
+        reportRows.push({
+          ...row,
+          status: "included",
+          convictionBelowThreshold,
+          registeredLessThanOneYearAgo,
+        });
       }
     }
+
+    reportRows.sort(compareReportRows);
+    const csv = toCsv(reportRows);
+    fs.mkdirSync(new URL("../temp/", import.meta.url), { recursive: true });
+    fs.writeFileSync(CSV_REPORT_URL, `${csv}\n`);
+    console.log("csv report:", fileURLToPathString(CSV_REPORT_URL));
+    console.log(csv);
 
     console.log("excluded subnet count:", excluded.length);
     for (const row of excluded) {
@@ -94,8 +117,10 @@ async function main() {
         `most_convicted=${row.mostConvicted ?? "<none>"}`,
         `conviction=${formatU64F64(row.convictionBits)}`,
         `subnet_alpha_out=${row.alphaOut}`,
+        `subnet_alpha_out_share=${row.alphaOutShare}`,
         `registered_at=${row.registeredAt}`,
         `age_blocks=${row.ageBlocks}`,
+        `age_days=${row.ageDays}`,
         `conviction_below_threshold=${row.convictionBelowThreshold}`,
         `registered_less_than_one_year_ago=${row.registeredLessThanOneYearAgo}`
       );
@@ -114,8 +139,10 @@ async function main() {
           `most_convicted=${row.mostConvicted ?? "<none>"}`,
           `conviction=${formatU64F64(row.convictionBits)}`,
           `subnet_alpha_out=${row.alphaOut}`,
+          `subnet_alpha_out_share=${row.alphaOutShare}`,
           `registered_at=${row.registeredAt}`,
-          `age_blocks=${row.ageBlocks}`
+          `age_blocks=${row.ageBlocks}`,
+          `age_days=${row.ageDays}`
         );
       }
     }
@@ -252,6 +279,94 @@ function formatU64F64(bits) {
   const fraction = bits & ((1n << 64n) - 1n);
   const decimal = (fraction * 1_000_000n) >> 64n;
   return `${whole}.${decimal.toString().padStart(6, "0")}`;
+}
+
+function sumActiveAlphaOut(networkAddedByNetuid, alphaOutByNetuid) {
+  let total = 0n;
+  for (let netuid = START_NETUID; netuid <= END_NETUID; netuid += 1) {
+    if (networkAddedByNetuid.get(netuid) ?? false) {
+      total += alphaOutByNetuid.get(netuid) ?? 0n;
+    }
+  }
+  return total;
+}
+
+function formatShare(value, total) {
+  if (total === 0n) {
+    return "0.000000000000";
+  }
+  const scaled = (value * 1_000_000_000_000n) / total;
+  const whole = scaled / 1_000_000_000_000n;
+  const fraction = scaled % 1_000_000_000_000n;
+  return `${whole}.${fraction.toString().padStart(12, "0")}`;
+}
+
+function formatAgeDays(ageBlocks) {
+  const scaled = (ageBlocks * 10_000n) / BLOCKS_PER_DAY;
+  const whole = scaled / 10_000n;
+  const fraction = scaled % 10_000n;
+  return `${whole}.${fraction.toString().padStart(4, "0")}`;
+}
+
+function compareReportRows(a, b) {
+  if (a.ageBlocks !== b.ageBlocks) {
+    return a.ageBlocks > b.ageBlocks ? -1 : 1;
+  }
+  if (a.alphaOut !== b.alphaOut) {
+    return a.alphaOut > b.alphaOut ? -1 : 1;
+  }
+  return a.netuid - b.netuid;
+}
+
+function toCsv(rows) {
+  const headers = [
+    "netuid",
+    "status",
+    "subnet_age_days",
+    "subnet_alpha_out_share",
+    "subnet_alpha_out",
+    "conviction",
+    "registered_at",
+    "age_blocks",
+    "owner",
+    "most_convicted",
+    "conviction_below_threshold",
+    "registered_less_than_one_year_ago",
+  ];
+  const lines = [headers.join(",")];
+  for (const row of rows) {
+    lines.push(
+      [
+        row.netuid,
+        row.status,
+        row.ageDays,
+        row.alphaOutShare,
+        row.alphaOut,
+        formatU64F64(row.convictionBits),
+        row.registeredAt,
+        row.ageBlocks,
+        row.owner,
+        row.mostConvicted ?? "",
+        row.convictionBelowThreshold,
+        row.registeredLessThanOneYearAgo,
+      ]
+        .map(csvValue)
+        .join(",")
+    );
+  }
+  return lines.join("\n");
+}
+
+function csvValue(value) {
+  const string = String(value);
+  if (!/[",\n\r]/.test(string)) {
+    return string;
+  }
+  return `"${string.replaceAll('"', '""')}"`;
+}
+
+function fileURLToPathString(url) {
+  return fileURLToPath(url);
 }
 
 function defaultEndpoint() {
