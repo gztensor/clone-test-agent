@@ -11,6 +11,7 @@ const SAMPLE_BLOCKS = Number(process.env.STAKING_BLOCK_TIME_SAMPLE_BLOCKS ?? 360
 const LONG_BLOCK_THRESHOLD_MS = Number(process.env.STAKING_BLOCK_TIME_LONG_THRESHOLD_MS ?? 18_000);
 const POLL_MS = Number(process.env.STAKING_BLOCK_TIME_POLL_MS ?? 750);
 const LOG_EVERY_BLOCK = process.env.STAKING_BLOCK_TIME_LOG_EVERY_BLOCK === "1";
+const TRACK_ROOT_CLAIMS = process.env.STAKING_BLOCK_TIME_TRACK_ROOT_CLAIMS !== "0";
 const LOGGER = createTempLogger("mainnet-staking-block-time-correlation.log");
 
 LOGGER.captureConsole();
@@ -36,6 +37,11 @@ async function main() {
     console.log("sample_blocks:", SAMPLE_BLOCKS);
     console.log("long_block_threshold_ms:", LONG_BLOCK_THRESHOLD_MS);
     console.log("staking_call_match:", "section=subtensorModule method contains stake|unstake|delegate");
+    console.log("track_root_claims:", TRACK_ROOT_CLAIMS);
+    if (TRACK_ROOT_CLAIMS) {
+      console.log("root_claim_swap_measure:", "RootClaimed events whose coldkey RootClaimType at block is Swap");
+      console.log("root_sell_measure:", "SubtensorModule.SubnetRootSellTao non-zero entries at block hash");
+    }
 
     const samples = await collectSamples(SAMPLE_BLOCKS);
     printSummary(samples);
@@ -80,6 +86,7 @@ async function collectSamples(targetBlocks) {
       const extrinsics = signedBlock.block.extrinsics;
       const stakingExtrinsics = extrinsics.filter(isStakingExtrinsic);
       const successfulStakingExtrinsics = countSuccessfulStakingExtrinsics(extrinsics, events);
+      const rootClaims = TRACK_ROOT_CLAIMS ? await rootClaimMetricsAt(hash, events) : emptyRootClaimMetrics();
       const sample = {
         number,
         hash,
@@ -88,10 +95,17 @@ async function collectSamples(targetBlocks) {
         stakingExtrinsics: stakingExtrinsics.length,
         successfulStakingExtrinsics,
         stakingMethods: methodCounts(stakingExtrinsics),
+        ...rootClaims,
       };
 
       samples.push(sample);
-      if (LOG_EVERY_BLOCK || sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS || sample.stakingExtrinsics > 0) {
+      if (
+        LOG_EVERY_BLOCK ||
+        sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS ||
+        sample.stakingExtrinsics > 0 ||
+        sample.rootClaimEvents > 0 ||
+        sample.rootSellNetuids.length > 0
+      ) {
         console.log(
           "block_sample:",
           `number=${sample.number}`,
@@ -99,7 +113,14 @@ async function collectSamples(targetBlocks) {
           `extrinsics=${sample.extrinsics}`,
           `staking_extrinsics=${sample.stakingExtrinsics}`,
           `successful_staking_extrinsics=${sample.successfulStakingExtrinsics}`,
-          `staking_methods=${formatMethodCounts(sample.stakingMethods)}`
+          `staking_methods=${formatMethodCounts(sample.stakingMethods)}`,
+          `root_claim_events=${sample.rootClaimEvents}`,
+          `root_claim_swap_events=${sample.rootClaimSwapEvents}`,
+          `root_claim_keep_events=${sample.rootClaimKeepEvents}`,
+          `root_claim_unknown_events=${sample.rootClaimUnknownEvents}`,
+          `root_sell_netuid_count=${sample.rootSellNetuids.length}`,
+          `root_sell_netuids=${sample.rootSellNetuids.length === 0 ? "none" : sample.rootSellNetuids.join(",")}`,
+          `root_sell_tao=${sample.rootSellTao}`
         );
       }
 
@@ -153,6 +174,81 @@ function countSuccessfulStakingExtrinsics(extrinsics, events) {
   return successful;
 }
 
+async function rootClaimMetricsAt(hash, events) {
+  const rootClaimEvents = events
+    .map(({ event }) => event)
+    .filter((event) => event.section === "subtensorModule" && event.method === "RootClaimed");
+
+  let rootClaimSwapEvents = 0;
+  let rootClaimKeepEvents = 0;
+  let rootClaimUnknownEvents = 0;
+
+  for (const event of rootClaimEvents) {
+    const coldkey = extractRootClaimColdkey(event);
+    if (!coldkey || !api.query.subtensorModule?.rootClaimType) {
+      rootClaimUnknownEvents += 1;
+      continue;
+    }
+
+    const claimType = (await api.query.subtensorModule.rootClaimType.at(hash, coldkey)).toString();
+    if (claimType === "Swap") {
+      rootClaimSwapEvents += 1;
+    } else if (claimType === "Keep" || claimType.startsWith("{\"keepSubnets\"") || claimType.includes("KeepSubnets")) {
+      rootClaimKeepEvents += 1;
+    } else {
+      rootClaimUnknownEvents += 1;
+    }
+  }
+
+  const rootSellEntries = api.query.subtensorModule?.subnetRootSellTao
+    ? await api.query.subtensorModule.subnetRootSellTao.entriesAt(hash)
+    : [];
+  const rootSellNonZero = rootSellEntries
+    .map(([key, value]) => ({
+      netuid: key.args[0].toNumber(),
+      tao: value.toBigInt(),
+    }))
+    .filter((entry) => entry.tao > 0n)
+    .sort((left, right) => left.netuid - right.netuid);
+
+  return {
+    rootClaimEvents: rootClaimEvents.length,
+    rootClaimSwapEvents,
+    rootClaimKeepEvents,
+    rootClaimUnknownEvents,
+    rootSellNetuids: rootSellNonZero.map((entry) => entry.netuid),
+    rootSellTao: rootSellNonZero.reduce((total, entry) => total + entry.tao, 0n).toString(),
+  };
+}
+
+function emptyRootClaimMetrics() {
+  return {
+    rootClaimEvents: 0,
+    rootClaimSwapEvents: 0,
+    rootClaimKeepEvents: 0,
+    rootClaimUnknownEvents: 0,
+    rootSellNetuids: [],
+    rootSellTao: "0",
+  };
+}
+
+function extractRootClaimColdkey(event) {
+  if (event.data && typeof event.data === "object" && !Array.isArray(event.data) && "coldkey" in event.data) {
+    return event.data.coldkey.toString();
+  }
+
+  if (event.data?.length > 0) {
+    return event.data[0].toString();
+  }
+
+  const json = event.data.toJSON();
+  if (json && typeof json === "object" && "coldkey" in json) {
+    return json.coldkey;
+  }
+
+  return null;
+}
+
 function methodCounts(extrinsics) {
   const counts = new Map();
   for (const extrinsic of extrinsics) {
@@ -168,8 +264,25 @@ function printSummary(samples) {
   const noStakingBlocks = samples.filter((sample) => sample.stakingExtrinsics === 0);
   const totalStakingExtrinsics = sum(samples.map((sample) => sample.stakingExtrinsics));
   const totalSuccessfulStakingExtrinsics = sum(samples.map((sample) => sample.successfulStakingExtrinsics));
+  const rootClaimBlocks = samples.filter((sample) => sample.rootClaimEvents > 0);
+  const rootClaimSwapBlocks = samples.filter((sample) => sample.rootClaimSwapEvents > 0);
+  const rootSellBlocks = samples.filter((sample) => sample.rootSellNetuids.length > 0);
+  const noRootClaimSwapBlocks = samples.filter((sample) => sample.rootClaimSwapEvents === 0);
+  const noRootSellBlocks = samples.filter((sample) => sample.rootSellNetuids.length === 0);
   const correlation = pearson(
     samples.map((sample) => sample.stakingExtrinsics),
+    samples.map((sample) => sample.deltaMs)
+  );
+  const rootClaimSwapCorrelation = pearson(
+    samples.map((sample) => sample.rootClaimSwapEvents),
+    samples.map((sample) => sample.deltaMs)
+  );
+  const rootSellNetuidCorrelation = pearson(
+    samples.map((sample) => sample.rootSellNetuids.length),
+    samples.map((sample) => sample.deltaMs)
+  );
+  const rootSellTaoCorrelation = pearson(
+    samples.map((sample) => Number(sample.rootSellTao)),
     samples.map((sample) => sample.deltaMs)
   );
 
@@ -183,7 +296,13 @@ function printSummary(samples) {
     `staking_blocks=${stakingBlocks.length}`,
     `total_staking_extrinsics=${totalStakingExtrinsics}`,
     `total_successful_staking_extrinsics=${totalSuccessfulStakingExtrinsics}`,
-    `pearson_staking_count_vs_delta=${Number.isNaN(correlation) ? "n/a" : round(correlation, 4)}`
+    `pearson_staking_count_vs_delta=${Number.isNaN(correlation) ? "n/a" : round(correlation, 4)}`,
+    `root_claim_blocks=${rootClaimBlocks.length}`,
+    `root_claim_swap_blocks=${rootClaimSwapBlocks.length}`,
+    `root_sell_blocks=${rootSellBlocks.length}`,
+    `pearson_root_claim_swap_count_vs_delta=${Number.isNaN(rootClaimSwapCorrelation) ? "n/a" : round(rootClaimSwapCorrelation, 4)}`,
+    `pearson_root_sell_netuid_count_vs_delta=${Number.isNaN(rootSellNetuidCorrelation) ? "n/a" : round(rootSellNetuidCorrelation, 4)}`,
+    `pearson_root_sell_tao_vs_delta=${Number.isNaN(rootSellTaoCorrelation) ? "n/a" : round(rootSellTaoCorrelation, 4)}`
   );
 
   console.log(
@@ -195,6 +314,48 @@ function printSummary(samples) {
     `no_staking_avg_ms=${round(avgOrZero(noStakingBlocks.map((sample) => sample.deltaMs)), 2)}`,
     `no_staking_long_blocks=${noStakingBlocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`
   );
+
+  console.log(
+    "root_claim_swaps_vs_no_swaps:",
+    `root_claim_swap_blocks=${rootClaimSwapBlocks.length}`,
+    `root_claim_swap_avg_ms=${round(avgOrZero(rootClaimSwapBlocks.map((sample) => sample.deltaMs)), 2)}`,
+    `root_claim_swap_long_blocks=${rootClaimSwapBlocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`,
+    `no_root_claim_swap_blocks=${noRootClaimSwapBlocks.length}`,
+    `no_root_claim_swap_avg_ms=${round(avgOrZero(noRootClaimSwapBlocks.map((sample) => sample.deltaMs)), 2)}`,
+    `no_root_claim_swap_long_blocks=${noRootClaimSwapBlocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`
+  );
+
+  console.log(
+    "root_sells_vs_no_sells:",
+    `root_sell_blocks=${rootSellBlocks.length}`,
+    `root_sell_avg_ms=${round(avgOrZero(rootSellBlocks.map((sample) => sample.deltaMs)), 2)}`,
+    `root_sell_long_blocks=${rootSellBlocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`,
+    `no_root_sell_blocks=${noRootSellBlocks.length}`,
+    `no_root_sell_avg_ms=${round(avgOrZero(noRootSellBlocks.map((sample) => sample.deltaMs)), 2)}`,
+    `no_root_sell_long_blocks=${noRootSellBlocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`
+  );
+
+  for (const [count, blocks] of groupByRootClaimSwapCount(samples)) {
+    console.log(
+      "root_claim_swap_count_bucket:",
+      `root_claim_swap_events=${count}`,
+      `blocks=${blocks.length}`,
+      `avg_ms=${round(avg(blocks.map((sample) => sample.deltaMs)), 2)}`,
+      `long_blocks=${blocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`,
+      `max_ms=${Math.max(...blocks.map((sample) => sample.deltaMs))}`
+    );
+  }
+
+  for (const [count, blocks] of groupByRootSellNetuidCount(samples)) {
+    console.log(
+      "root_sell_netuid_count_bucket:",
+      `root_sell_netuid_count=${count}`,
+      `blocks=${blocks.length}`,
+      `avg_ms=${round(avg(blocks.map((sample) => sample.deltaMs)), 2)}`,
+      `long_blocks=${blocks.filter((sample) => sample.deltaMs >= LONG_BLOCK_THRESHOLD_MS).length}`,
+      `max_ms=${Math.max(...blocks.map((sample) => sample.deltaMs))}`
+    );
+  }
 
   for (const [count, blocks] of groupByStakingCount(samples)) {
     console.log(
@@ -215,7 +376,12 @@ function printSummary(samples) {
       `extrinsics=${sample.extrinsics}`,
       `staking_extrinsics=${sample.stakingExtrinsics}`,
       `successful_staking_extrinsics=${sample.successfulStakingExtrinsics}`,
-      `staking_methods=${formatMethodCounts(sample.stakingMethods)}`
+      `staking_methods=${formatMethodCounts(sample.stakingMethods)}`,
+      `root_claim_events=${sample.rootClaimEvents}`,
+      `root_claim_swap_events=${sample.rootClaimSwapEvents}`,
+      `root_sell_netuid_count=${sample.rootSellNetuids.length}`,
+      `root_sell_netuids=${sample.rootSellNetuids.length === 0 ? "none" : sample.rootSellNetuids.join(",")}`,
+      `root_sell_tao=${sample.rootSellTao}`
     );
   }
 }
@@ -225,6 +391,25 @@ function groupByStakingCount(samples) {
   for (const sample of samples) {
     if (!groups.has(sample.stakingExtrinsics)) groups.set(sample.stakingExtrinsics, []);
     groups.get(sample.stakingExtrinsics).push(sample);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left - right);
+}
+
+function groupByRootClaimSwapCount(samples) {
+  const groups = new Map();
+  for (const sample of samples) {
+    if (!groups.has(sample.rootClaimSwapEvents)) groups.set(sample.rootClaimSwapEvents, []);
+    groups.get(sample.rootClaimSwapEvents).push(sample);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left - right);
+}
+
+function groupByRootSellNetuidCount(samples) {
+  const groups = new Map();
+  for (const sample of samples) {
+    const count = sample.rootSellNetuids.length;
+    if (!groups.has(count)) groups.set(count, []);
+    groups.get(count).push(sample);
   }
   return [...groups.entries()].sort(([left], [right]) => left - right);
 }
