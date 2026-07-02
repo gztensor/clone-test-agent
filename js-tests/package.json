@@ -11,6 +11,7 @@
     "test:balancer-testnet-liquidity-slippage": "node tests/test-balancer-testnet-liquidity-slippage.js",
     "test:balancer-edge-emission-issuance": "node tests/test-balancer-edge-emission-issuance.js",
     "test:balancer-reservoir-deregistration": "node tests/test-balancer-reservoir-deregistration.js",
+    "test:add-stake-limit-unused-refund-localnet": "node tests/test-add-stake-limit-unused-refund-localnet.js",
     "test:total-issuance-trackers": "node tests/test-total-issuance-trackers.js",
     "test:net-tao-flow-emission-allocation": "node tests/test-net-tao-flow-emission-allocation.js",
     "test:locks-conviction": "node tests/test-locks-conviction.js",
