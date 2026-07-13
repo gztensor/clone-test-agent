@@ -6,6 +6,11 @@ import { u8aToHex } from "@polkadot/util";
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
 import { clearLastRateLimitedBlocks } from "../lib/rate-limit-storage.js";
+import {
+  registerSubnetAndWait,
+  subnetLimitForImmediateRegistration,
+  waitForDissolveCleanup,
+} from "../lib/subnet-registration.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUN_ID = process.env.DISSOLVE_RESERVOIR_RUN_ID ?? `run${Date.now()}p${process.pid}`;
@@ -69,6 +74,17 @@ async function main() {
       assert.ok(before.stakerAlpha > 0n, "test staker alpha must be non-zero before deregistration");
 
       await rootDissolveNetwork(netuid);
+      const afterDissolve = await snapshot(netuid, subnetAccount, "after rootDissolveNetwork before cleanup");
+      assert.equal(afterDissolve.taoReservoir, 0n, "TAO reservoir was not cleared during deregistration");
+      assert.equal(afterDissolve.alphaReservoir, 0n, "alpha reservoir was not cleared during deregistration");
+      assert.equal(
+        afterDissolve.subnetTao,
+        before.subnetTao + before.taoReservoir,
+        "deregistration should materialize the TAO reservoir into SubnetTAO before cleanup payout"
+      );
+
+      await waitForDissolveCleanup(api, netuid, "dissolve reservoir recovery");
+      await assertIssuanceMatch("after dissolve cleanup");
 
       const [ownerAfter, stakerAfter] = await Promise.all([
         freeBalance(subnetOwner.address),
@@ -132,6 +148,7 @@ function assertMetadataAvailable() {
     ["SubtensorModule.addStakeLimit", api.tx.subtensorModule?.addStakeLimit],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
     ["SubtensorModule.SubnetOwner", api.query.subtensorModule?.subnetOwner],
+    ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
     ["SubtensorModule.SubnetProtocolAlpha", api.query.subtensorModule?.subnetProtocolAlpha],
@@ -196,9 +213,10 @@ async function captureRegistrationGlobals() {
 
 async function enableSubnetRegistration() {
   const activeCount = await countNonRootSubnets();
+  const targetLimit = await subnetLimitForImmediateRegistration(api);
   await sudoSetStorage(
     [
-      [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", BigInt(activeCount + 1))],
+      [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", BigInt(targetLimit))],
       [api.query.subtensorModule.networkRateLimit.key(), storageValueHex("u64", 0n)],
       [api.query.subtensorModule.networkRegistrationStartBlock.key(), storageValueHex("u64", 0n)],
       [api.query.subtensorModule.networkImmunityPeriod.key(), storageValueHex("u64", 0n)],
@@ -207,7 +225,12 @@ async function enableSubnetRegistration() {
     ],
     "sudo enable one fresh subnet registration"
   );
-  console.log("subnet registration controls lowered:", `active_count=${activeCount}`, `lock_cost=${NETWORK_LOCK_COST}`);
+  console.log(
+    "subnet registration controls lowered:",
+    `active_count=${activeCount}`,
+    `subnet_limit=${targetLimit}`,
+    `lock_cost=${NETWORK_LOCK_COST}`
+  );
 }
 
 async function restoreRegistrationGlobals(globals) {
@@ -225,18 +248,7 @@ async function restoreRegistrationGlobals(globals) {
 }
 
 async function registerSubnet() {
-  const result = await submitAndWait(
-    subnetOwner,
-    api.tx.subtensorModule.registerNetwork(ownerHotkey.address),
-    "register fresh subnet"
-  );
-  const event = result.events.find(
-    ({ event }) => event.section === "subtensorModule" && event.method === "NetworkAdded"
-  );
-  assert.ok(event, "registerNetwork did not emit NetworkAdded");
-  const netuid = event.event.data[0].toNumber();
-  assert.equal((await api.query.subtensorModule.networksAdded(netuid)).isTrue, true, "registered subnet missing");
-  assert.equal((await api.query.subtensorModule.subnetOwner(netuid)).toString(), subnetOwner.address, "unexpected owner");
+  const netuid = await registerSubnetAndWait(api, subnetOwner, ownerHotkey, submitAndWait, "register fresh subnet");
   console.log("registered fresh subnet:", `netuid=${netuid}`, `owner=${subnetOwner.address}`, `hotkey=${ownerHotkey.address}`);
   return netuid;
 }

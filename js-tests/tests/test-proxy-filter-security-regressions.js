@@ -70,9 +70,9 @@ async function main() {
     );
 
     await expectProxyTypeDenied(
-      "Owner denies sudoSetSubnetOwnerHotkey",
+      "Owner denies sudoSetSnOwnerHotkey",
       "Owner",
-      api.tx.adminUtils.sudoSetSubnetOwnerHotkey(0, replacementHotkey.address)
+      api.tx.adminUtils.sudoSetSnOwnerHotkey(0, replacementHotkey.address)
     );
 
     console.log("proxy filter security regressions: ok");
@@ -96,7 +96,7 @@ async function assertMetadataAvailable() {
     ["Proxy.proxy", api.tx.proxy?.proxy],
     ["SubtensorModule.swapHotkeyV2", api.tx.subtensorModule?.swapHotkeyV2],
     ["SubtensorModule.announceColdkeySwap", api.tx.subtensorModule?.announceColdkeySwap],
-    ["AdminUtils.sudoSetSubnetOwnerHotkey", api.tx.adminUtils?.sudoSetSubnetOwnerHotkey],
+    ["AdminUtils.sudoSetSnOwnerHotkey", api.tx.adminUtils?.sudoSetSnOwnerHotkey],
   ].filter(([, value]) => !value);
 
   assert.equal(

@@ -5,6 +5,7 @@ import { u8aToHex } from "@polkadot/util";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
+import { registerSubnetAndWait, subnetLimitForImmediateRegistration } from "../lib/subnet-registration.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUN_ID = process.env.ROOT_REBORN_RUN_ID ?? `run${Date.now()}p${process.pid}`;
@@ -115,6 +116,7 @@ function assertMetadataAvailable() {
     ["SubtensorModule.SubnetAlphaOut", api.query.subtensorModule?.subnetAlphaOut],
     ["SubtensorModule.SubnetLimit", api.query.subtensorModule?.subnetLimit],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
+    ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.NetworkRegistrationAllowed", api.query.subtensorModule?.networkRegistrationAllowed],
     ["SubtensorModule.RootAlphaDividendsPerSubnet", api.query.subtensorModule?.rootAlphaDividendsPerSubnet],
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
@@ -141,7 +143,7 @@ async function fund(address, amount) {
 async function prepareSubnetRegistration() {
   const activeCount = await activeNonRootSubnetCount();
   const subnetLimit = (await api.query.subtensorModule.subnetLimit()).toNumber();
-  const targetLimit = Math.max(subnetLimit, activeCount + 2);
+  const targetLimit = Math.max(subnetLimit, activeCount + 2, await subnetLimitForImmediateRegistration(api));
   await submitAndWait(
     alice,
     api.tx.sudo.sudo(
@@ -166,16 +168,7 @@ async function activeNonRootSubnetCount() {
 }
 
 async function registerSubnet() {
-  const result = await submitAndWait(
-    alice,
-    api.tx.subtensorModule.registerNetwork(validatorHotkey.address),
-    "registerNetwork"
-  );
-  const event = result.events.find(
-    ({ event }) => event.section === "subtensorModule" && event.method === "NetworkAdded"
-  );
-  assert.ok(event, "NetworkAdded event not found");
-  const netuid = event.event.data[0].toNumber();
+  const netuid = await registerSubnetAndWait(api, alice, validatorHotkey, submitAndWait, "registerNetwork");
   console.log("registered subnet:", netuid);
   return netuid;
 }

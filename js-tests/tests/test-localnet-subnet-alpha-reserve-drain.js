@@ -5,6 +5,7 @@ import { u8aToHex } from "@polkadot/util";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
+import { registerSubnetAndWait, subnetLimitForImmediateRegistration } from "../lib/subnet-registration.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUN_ID = process.env.LOCALNET_ALPHA_DRAIN_RUN_ID ?? `run${Date.now()}p${process.pid}`;
@@ -168,6 +169,7 @@ function assertMetadataAvailable() {
     ["SubtensorModule.NetworkMinLockCost", api.query.subtensorModule?.networkMinLockCost],
     ["SubtensorModule.NetworkLastLockCost", api.query.subtensorModule?.networkLastLockCost],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
+    ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.SubtokenEnabled", api.query.subtensorModule?.subtokenEnabled],
     ["SubtensorModule.FirstEmissionBlockNumber", api.query.subtensorModule?.firstEmissionBlockNumber],
     ["SubtensorModule.Tempo", api.query.subtensorModule?.tempo],
@@ -191,7 +193,7 @@ async function assertAliceIsSudo() {
 async function prepareSubnetRegistration() {
   const activeCount = await activeNonRootSubnetCount();
   const subnetLimit = (await api.query.subtensorModule.subnetLimit()).toNumber();
-  const targetLimit = Math.max(subnetLimit, activeCount + 1);
+  const targetLimit = Math.max(subnetLimit, await subnetLimitForImmediateRegistration(api));
   const entries = [
     [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", targetLimit)],
     [api.query.subtensorModule.networkRateLimit.key(), storageValueHex("u64", 0n)],
@@ -215,17 +217,8 @@ async function activeNonRootSubnetCount() {
 }
 
 async function registerSubnet() {
-  const result = await submitAndWait(
-    alice,
-    api.tx.subtensorModule.registerNetwork(ownerHotkey.address),
-    "registerNetwork"
-  );
-  const event = result.events.find(
-    ({ event }) => event.section === "subtensorModule" && event.method === "NetworkAdded"
-  );
-  assert.ok(event, "NetworkAdded event not found");
-  const netuid = event.event.data[0].toNumber();
-  assert.equal((await api.query.subtensorModule.networksAdded(netuid)).isTrue, true, `${netuid} was not added`);
+  const netuid = await registerSubnetAndWait(api, alice, ownerHotkey, submitAndWait, "registerNetwork");
+  console.log("registered subnet:", `netuid=${netuid}`, `owner=${alice.address}`, `hotkey=${ownerHotkey.address}`);
   return netuid;
 }
 

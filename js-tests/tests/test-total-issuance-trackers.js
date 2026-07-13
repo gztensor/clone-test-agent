@@ -7,6 +7,7 @@ import { ethers } from "ethers";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
+import { registerSubnetAndWait, subnetLimitForImmediateRegistration } from "../lib/subnet-registration.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const ETH_RPC_ENDPOINT = process.env.ETH_RPC_ENDPOINT ?? "http://127.0.0.1:9944";
@@ -101,6 +102,7 @@ function assertMetadataAvailable() {
     ["SubtensorModule.NetworkMinLockCost", api.query.subtensorModule?.networkMinLockCost],
     ["SubtensorModule.NetworkLastLockCost", api.query.subtensorModule?.networkLastLockCost],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
+    ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.SubnetMovingPrice", api.query.subtensorModule?.subnetMovingPrice],
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
     ["SubtensorModule.Burn", api.query.subtensorModule?.burn],
@@ -209,9 +211,10 @@ async function exerciseSubnetDeregistrationByRegistration() {
   const initialActiveCount = await countNonRootSubnets();
 
   try {
+    const firstRegistrationLimit = Math.max(initialActiveCount + 1, await subnetLimitForImmediateRegistration(api));
     await sudoSetStorage(
       [
-        [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", initialActiveCount + 1)],
+        [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", firstRegistrationLimit)],
         [api.query.subtensorModule.networkRateLimit.key(), storageValueHex("u64", 0n)],
         [api.query.subtensorModule.networkRegistrationStartBlock.key(), storageValueHex("u64", 0n)],
         [api.query.subtensorModule.networkImmunityPeriod.key(), storageValueHex("u64", 0n)],
@@ -299,13 +302,7 @@ async function exerciseEvmContractFees() {
 }
 
 async function registerSubnet(owner, hotkey, label) {
-  const result = await submitAndWait(owner, api.tx.subtensorModule.registerNetwork(hotkey.address), label);
-  const event = result.events.find(
-    ({ event }) => event.section === "subtensorModule" && event.method === "NetworkAdded"
-  );
-  assert.ok(event, `${label} did not emit NetworkAdded`);
-  const netuid = event.event.data[0].toNumber();
-  assert.equal((await api.query.subtensorModule.networksAdded(netuid)).isTrue, true, `${netuid} was not added`);
+  const netuid = await registerSubnetAndWait(api, owner, hotkey, submitAndWait, label);
   console.log(`${label}:`, `netuid=${netuid}`, `owner=${owner.address}`, `hotkey=${hotkey.address}`);
   return netuid;
 }

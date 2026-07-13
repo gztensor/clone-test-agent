@@ -6,6 +6,11 @@ import { u8aToHex } from "@polkadot/util";
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
 import { clearLastRateLimitedBlocks } from "../lib/rate-limit-storage.js";
+import {
+  registerSubnetAndWait,
+  subnetLimitForImmediateRegistration,
+  waitForDissolveCleanup,
+} from "../lib/subnet-registration.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUN_ID = process.env.RESERVOIR_DEREG_RUN_ID ?? `run${Date.now()}p${process.pid}`;
@@ -73,7 +78,28 @@ async function main() {
     await submitAndWait(alice, api.tx.sudo.sudo(api.tx.subtensorModule.rootDissolveNetwork(netuid)), "sudo root_dissolve_network");
     await assertIssuanceMatch("after root_dissolve_network");
 
-    const after = await snapshot(netuid);
+    const afterDissolve = await snapshot(netuid);
+    console.log(
+      "after root_dissolve_network before cleanup:",
+      `netuid=${netuid}`,
+      `networkAdded=${afterDissolve.networkAdded}`,
+      `subnetTAO=${afterDissolve.subnetTao}`,
+      `taoReservoir=${afterDissolve.taoReservoir}`,
+      `alphaReservoir=${afterDissolve.alphaReservoir}`
+    );
+    assert.equal(afterDissolve.networkAdded, false, "subnet should be deregistered immediately");
+    assert.equal(afterDissolve.taoReservoir, 0n, "BalancerTaoReservoir should be cleared during deregistration");
+    assert.equal(afterDissolve.alphaReservoir, 0n, "BalancerAlphaReservoir should be cleared during deregistration");
+    assert.equal(
+      afterDissolve.subnetTao,
+      before.subnetTao + before.taoReservoir,
+      "deregistration should materialize the TAO reservoir into SubnetTAO before cleanup payout"
+    );
+
+    await waitForDissolveCleanup(api, netuid, "reservoir deregistration");
+    await assertIssuanceMatch("after dissolve cleanup");
+
+    const after = await snapshot(netuid, before.subnetAccount);
     const ownerGain = after.ownerFree - before.ownerFree;
     const stakerGain = after.stakerFree - before.stakerFree;
     const combinedRecipientGain = ownerGain + stakerGain;
@@ -129,6 +155,7 @@ function assertMetadataAvailable() {
     ["Balances.transfer", api.tx.balances?.transferKeepAlive ?? api.tx.balances?.transferAllowDeath ?? api.tx.balances?.transfer],
     ["SubtensorModule.TotalIssuance", api.query.subtensorModule?.totalIssuance],
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
+    ["SubtensorModule.SubnetOwnerHotkey", api.query.subtensorModule?.subnetOwnerHotkey],
     ["SubtensorModule.SubnetTAO", api.query.subtensorModule?.subnetTAO],
     ["SubtensorModule.SubnetAlphaIn", api.query.subtensorModule?.subnetAlphaIn],
     ["SubtensorModule.SubnetAlphaOut", api.query.subtensorModule?.subnetAlphaOut],
@@ -168,9 +195,10 @@ async function fundAccounts() {
 
 async function prepareRegistration() {
   const activeCount = await activeNonRootSubnetCount();
+  const targetLimit = await subnetLimitForImmediateRegistration(api);
   await sudoSetStorage(
     [
-      [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", activeCount + 1)],
+      [api.query.subtensorModule.subnetLimit.key(), storageValueHex("u16", targetLimit)],
       [api.query.subtensorModule.networkRateLimit.key(), storageValueHex("u64", 0n)],
       [api.query.subtensorModule.networkRegistrationStartBlock.key(), storageValueHex("u64", 0n)],
       [api.query.subtensorModule.networkImmunityPeriod.key(), storageValueHex("u64", 0n)],
@@ -180,17 +208,16 @@ async function prepareRegistration() {
     "sudo enable subnet registration"
   );
   const cleared = await clearLastRateLimitedBlocks(api, alice, submitAndWait, "clear registration rate limits");
-  console.log("registration prepared:", `activeCount=${activeCount}`, `rateLimitClearMode=${cleared.mode}`);
+  console.log(
+    "registration prepared:",
+    `activeCount=${activeCount}`,
+    `subnetLimit=${targetLimit}`,
+    `rateLimitClearMode=${cleared.mode}`
+  );
 }
 
 async function registerSubnet() {
-  const result = await submitAndWait(owner, api.tx.subtensorModule.registerNetwork(ownerHotkey.address), "registerNetwork");
-  const event = result.events.find(
-    ({ event }) => event.section === "subtensorModule" && event.method === "NetworkAdded"
-  );
-  assert.ok(event, "registerNetwork did not emit NetworkAdded");
-  const netuid = event.event.data[0].toNumber();
-  assert.equal((await api.query.subtensorModule.networksAdded(netuid)).isTrue, true, "registered subnet missing");
+  const netuid = await registerSubnetAndWait(api, owner, ownerHotkey, submitAndWait, "registerNetwork");
   console.log("registered subnet:", `netuid=${netuid}`, `owner=${owner.address}`, `ownerHotkey=${ownerHotkey.address}`);
   return netuid;
 }
@@ -229,8 +256,8 @@ async function setupReservoirFixture(netuid) {
   );
 }
 
-async function snapshot(netuid) {
-  const subnetAccount = await getSubnetAccountId(netuid);
+async function snapshot(netuid, knownSubnetAccount = null) {
+  const subnetAccount = knownSubnetAccount ?? (await getSubnetAccountId(netuid));
   const [networkAdded, subnetAccountInfo, ownerInfo, stakerInfo, subnetTao, taoReservoir, alphaReservoir] =
     await Promise.all([
       api.query.subtensorModule.networksAdded(netuid),
