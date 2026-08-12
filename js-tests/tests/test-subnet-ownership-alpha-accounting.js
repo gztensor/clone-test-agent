@@ -12,9 +12,19 @@ const BLOCKS_PER_DAY = 7_200;
 const ONE_YEAR_BLOCKS = BLOCKS_PER_DAY * 365 + 1_800;
 const FORECAST_YEARS = 10;
 const FORECAST_BLOCKS = ONE_YEAR_BLOCKS * FORECAST_YEARS;
-const MIGRATION_NAME = "migrate_backfill_historical_alpha_burned";
+const MIGRATION_NAMES = [
+  "migrate_fix_rao_alpha_out_accounting",
+  "migrate_rebase_recycled_alpha_asset_counters",
+  "migrate_backfill_historical_alpha_burned",
+];
 const MAINNET_GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03";
+const NETUID_ONE_ALPHA_OUT_CORRECTION = 16_841_481_627_450n;
 const NETUID_ONE_HISTORICAL_BURN = 661_707_044_125_477n;
+const RECYCLED_BURN_OFFSETS = new Map([
+  [16, 42_912_779_090_897n],
+  [40, 51_803_789_083_976n],
+  [58, 93_219_350_226_399n],
+]);
 const TAOSWAP_GATE_REFERENCE = new Map([
   [3, { block: 8_830_031, eta: "18 days" }],
   [20, { block: 8_830_181, eta: "3 days" }],
@@ -47,6 +57,16 @@ async function main() {
     }
 
     const snapshot = await captureSnapshot(PHASE);
+    let before;
+    if (PHASE === "after") {
+      before = JSON.parse(fs.readFileSync(BEFORE_JSON, "utf8"));
+      assert.notEqual(
+        snapshot.specVersion,
+        before.specVersion,
+        `runtime spec version did not change from ${before.specVersion}`
+      );
+      snapshot.migrationChecks = verifyMigrationEffects(before, snapshot);
+    }
     fs.mkdirSync(TEMP_DIR, { recursive: true });
     fs.writeFileSync(
       path.join(TEMP_DIR, `subnet-ownership-alpha-${PHASE}.json`),
@@ -54,12 +74,6 @@ async function main() {
     );
 
     if (PHASE === "after") {
-      const before = JSON.parse(fs.readFileSync(BEFORE_JSON, "utf8"));
-      assert.notEqual(
-        snapshot.specVersion,
-        before.specVersion,
-        `runtime spec version did not change from ${before.specVersion}`
-      );
       fs.writeFileSync(REPORT_PATH, renderReport(before, snapshot));
       console.log("report:", REPORT_PATH);
     }
@@ -79,14 +93,14 @@ async function waitForMigrationAndBlocks() {
   const start = (await api.rpc.chain.getHeader()).number.toNumber();
   const deadline = Date.now() + 180_000;
   let latest = start;
-  let migrationComplete = false;
+  let migrationStatus = {};
 
   while (Date.now() < deadline) {
     latest = (await api.rpc.chain.getHeader()).number.toNumber();
-    migrationComplete = await migrationHasRun();
-    if (latest >= start + 2 && migrationComplete) {
+    migrationStatus = await readMigrationStatus();
+    if (latest >= start + 2 && Object.values(migrationStatus).every(Boolean)) {
       console.log(
-        `post-upgrade readiness: block advanced ${start} -> ${latest}; ${MIGRATION_NAME}=true`
+        `post-upgrade readiness: block advanced ${start} -> ${latest}; migrations=${JSON.stringify(migrationStatus)}`
       );
       return;
     }
@@ -94,15 +108,17 @@ async function waitForMigrationAndBlocks() {
   }
 
   assert.fail(
-    `post-upgrade readiness timed out: block ${start} -> ${latest}; ${MIGRATION_NAME}=${migrationComplete}`
+    `post-upgrade readiness timed out: block ${start} -> ${latest}; migrations=${JSON.stringify(migrationStatus)}`
   );
 }
 
-async function migrationHasRun() {
+async function readMigrationStatus() {
   const query = api.query.subtensorModule?.hasMigrationRun;
-  if (!query) return false;
-  const key = `0x${Buffer.from(MIGRATION_NAME).toString("hex")}`;
-  return (await query(key)).isTrue;
+  if (!query) return Object.fromEntries(MIGRATION_NAMES.map((name) => [name, false]));
+  return Object.fromEntries(await Promise.all(MIGRATION_NAMES.map(async (name) => {
+    const key = `0x${Buffer.from(name).toString("hex")}`;
+    return [name, (await query(key)).isTrue];
+  })));
 }
 
 async function captureSnapshot(phase) {
@@ -317,12 +333,56 @@ async function captureSnapshot(phase) {
     specVersion: runtimeVersion.specVersion.toNumber(),
     unlockRate,
     maturityRate,
-    migrationComplete: await migrationHasRun(),
+    migrationStatus: await readMigrationStatus(),
     pendingBasketStorageAvailable: Boolean(api.query.subtensorModule.pendingBasketDeposits),
     alphaBurnedStorageAvailable: Boolean(api.query.alphaAssets?.alphaBurned),
     kingMismatches,
     alphaDiscrepancies,
     subnets,
+  };
+}
+
+function verifyMigrationEffects(before, after) {
+  const beforeByNetuid = new Map(before.subnets.map((row) => [row.netuid, row]));
+  const afterByNetuid = new Map(after.subnets.map((row) => [row.netuid, row]));
+  const beforeOne = beforeByNetuid.get(1);
+  const afterOne = afterByNetuid.get(1);
+  const alphaOutIncrease = BigInt(afterOne.alphaOut) - BigInt(beforeOne.alphaOut);
+  assert.ok(
+    alphaOutIncrease >= NETUID_ONE_ALPHA_OUT_CORRECTION,
+    `SubnetAlphaOut correction missing on subnet 1: observed ${alphaOutIncrease}, expected at least ${NETUID_ONE_ALPHA_OUT_CORRECTION}`
+  );
+
+  const burnedIncrease = BigInt(afterOne.burnedAlpha) - BigInt(beforeOne.burnedAlpha);
+  assert.ok(
+    burnedIncrease * 100n >= NETUID_ONE_HISTORICAL_BURN * 99n,
+    `historical burn backfill missing on subnet 1: observed ${burnedIncrease}, expected approximately ${NETUID_ONE_HISTORICAL_BURN}`
+  );
+
+  const rebases = [...RECYCLED_BURN_OFFSETS].map(([netuid, expected]) => {
+    const beforeRow = beforeByNetuid.get(netuid);
+    const afterRow = afterByNetuid.get(netuid);
+    const observed = BigInt(beforeRow.burnedAlpha) - BigInt(afterRow.burnedAlpha);
+    assert.ok(
+      observed * 100n >= expected * 99n,
+      `recycled burn-counter rebase missing on subnet ${netuid}: observed ${observed}, expected approximately ${expected}`
+    );
+    return { netuid, expected: expected.toString(), observed: observed.toString() };
+  });
+
+  return {
+    allMarkers: MIGRATION_NAMES.every((name) => after.migrationStatus[name] === true),
+    alphaOut: {
+      netuid: 1,
+      expected: NETUID_ONE_ALPHA_OUT_CORRECTION.toString(),
+      observed: alphaOutIncrease.toString(),
+    },
+    historicalBurn: {
+      netuid: 1,
+      expected: NETUID_ONE_HISTORICAL_BURN.toString(),
+      observed: burnedIncrease.toString(),
+    },
+    recycledBurnRebases: rebases,
   };
 }
 
@@ -691,7 +751,7 @@ function renderReport(before, after) {
   return `# Subnet ownership conviction and alpha accounting\n\n` +
     `Generated: ${new Date().toISOString()}\n\n` +
     `## Run summary\n\n` +
-    `| Phase | Block | Runtime | Migration complete | Subnets | King calculation mismatches | Alpha discrepancies >1% |\n` +
+    `| Phase | Block | Runtime | All 3 migration markers | Subnets | King calculation mismatches | Alpha discrepancies >1% |\n` +
     `|---|---:|---|---|---:|---:|---:|\n` +
     summaryRow(before) + summaryRow(after) + `\n` +
     migrationFinding(before, after) +
@@ -780,16 +840,21 @@ function migrationFinding(before, after) {
   const beforeOne = before.subnets.find((row) => row.netuid === 1);
   const afterOne = after.subnets.find((row) => row.netuid === 1);
   const observedBackfill = BigInt(afterOne.burnedAlpha) - BigInt(beforeOne.burnedAlpha);
-  const backfillApplied =
-    observedBackfill > 0n && observedBackfill * 100n >= NETUID_ONE_HISTORICAL_BURN * 99n;
-  if (backfillApplied) {
+  const checks = after.migrationChecks;
+  const allEffectsApplied = checks?.allMarkers === true &&
+    BigInt(checks.alphaOut.observed) >= BigInt(checks.alphaOut.expected) &&
+    checks.recycledBurnRebases.length === RECYCLED_BURN_OFFSETS.size;
+  if (allEffectsApplied) {
     const comparison = observedBackfill === NETUID_ONE_HISTORICAL_BURN
       ? "exactly matched"
-      : "closely matched after other generation-rebase corrections";
-    return `> **Migration verification:** the historical-alpha correction applied on the clone despite its ` +
-      `non-mainnet genesis \`${after.genesisHash}\`. Subnet 1 expected approximately ` +
-      `\`+${formatAlpha(NETUID_ONE_HISTORICAL_BURN)} α\` and observed ` +
-      `\`+${formatAlpha(observedBackfill)} α\`; this ${comparison}. After all migrations, ` +
+      : "closely matched after normal post-snapshot burn activity";
+    return `> **Migration verification:** all three migration markers and their state effects were verified on ` +
+      `the clone despite its non-mainnet genesis \`${after.genesisHash}\`. Subnet 1 ` +
+      `\`SubnetAlphaOut\` increased by \`${formatAlpha(checks.alphaOut.observed)} α\` including the expected ` +
+      `\`${formatAlpha(checks.alphaOut.expected)} α\` repair. Its expected historical burn backfill was ` +
+      `approximately \`+${formatAlpha(NETUID_ONE_HISTORICAL_BURN)} α\` and observed ` +
+      `\`+${formatAlpha(observedBackfill)} α\`; this ${comparison}. Burn-counter rebases for subnets ` +
+      `16, 40, and 58 were also observed. After all three migrations, ` +
       `\`${after.alphaDiscrepancies.length}\` subnets exceed 1% discrepancy.\n\n`;
   }
   if (after.genesisHash === MAINNET_GENESIS || after.alphaDiscrepancies.length === 0) return "";
@@ -803,8 +868,10 @@ function migrationFinding(before, after) {
 }
 
 function summaryRow(snapshot) {
+  const migrationComplete = snapshot.migrationStatus &&
+    MIGRATION_NAMES.every((name) => snapshot.migrationStatus[name] === true);
   return `| ${snapshot.phase} | ${snapshot.block} | ${snapshot.specName}/${snapshot.specVersion} | ` +
-    `${snapshot.migrationComplete} | ${snapshot.subnets.length} | ${snapshot.kingMismatches.length} | ` +
+    `${migrationComplete} | ${snapshot.subnets.length} | ${snapshot.kingMismatches.length} | ` +
     `${snapshot.alphaDiscrepancies.length} |\n`;
 }
 
