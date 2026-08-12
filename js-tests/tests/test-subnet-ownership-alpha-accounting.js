@@ -17,6 +17,7 @@ const MAINNET_GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2
 const NETUID_ONE_HISTORICAL_BURN = 661_707_044_125_477n;
 const TAOSWAP_GATE_REFERENCE = new Map([
   [3, { block: 8_830_031, eta: "18 days" }],
+  [20, { block: 8_830_181, eta: "3 days" }],
   [24, { block: 8_830_006, eta: "17 days" }],
   [39, { block: 8_830_031, eta: "23 days" }],
   [81, { block: 8_830_031, eta: "9 days" }],
@@ -722,7 +723,7 @@ function taoswapComparison(before, after) {
   const rows = [...TAOSWAP_GATE_REFERENCE].map(([netuid, reference]) => {
     const row = beforeByNetuid.get(netuid);
     if (!row) return "";
-    return `| ${netuid} | ${taoswapGateInterval(row.gateProjection)} | ${reference.eta} ` +
+    return `| ${netuid} | ${takeoverInterval(row.gateProjection)} | ${reference.eta} ` +
       `(block ${reference.block.toLocaleString("en-US")}) | ${takeoverInterval(row.projection)} | ` +
       `${shortAccount(row.projection.king)} |\n`;
   }).join("");
@@ -738,10 +739,16 @@ function changedTakeoverSection(before, after) {
   const beforeByNetuid = new Map(before.subnets.map((row) => [row.netuid, row]));
   const changed = after.subnets
     .map((afterRow) => ({ before: beforeByNetuid.get(afterRow.netuid), after: afterRow }))
-    .filter(({ before: beforeRow, after: afterRow }) =>
-      takeoverInterval(beforeRow.projection) !== takeoverInterval(afterRow.projection) ||
-      beforeRow.projection.king !== afterRow.projection.king
-    );
+    .filter(({ before: beforeRow, after: afterRow }) => {
+      const newlyEndangered =
+        beforeRow.projection.status !== "projected" &&
+        beforeRow.projection.status !== "immediate" &&
+        afterRow.projection.status === "projected" &&
+        afterRow.projection.blocks > 0;
+      return newlyEndangered ||
+        takeoverInterval(beforeRow.projection) !== takeoverInterval(afterRow.projection) ||
+        beforeRow.projection.king !== afterRow.projection.king;
+    });
   let result = `## Changed subnet ownership takeover predictions\n\n` +
     `| Subnet netuid | Predicted takeover time interval before | Predicted takeover king before | Predicted takeover time interval after | Predicted takeover king after |\n` +
     `|---:|---|---|---|---|\n`;
@@ -758,12 +765,6 @@ function takeoverInterval(projection) {
   if (projection.status === "immediate") return "0";
   if (projection.status === "projected") return formatDuration(projection.blocks);
   return projection.status;
-}
-
-function taoswapGateInterval(projection) {
-  if (projection.status !== "projected") return takeoverInterval(projection);
-  const wholeDays = Math.ceil(projection.blocks / BLOCKS_PER_DAY);
-  return `~${wholeDays} days (${formatDuration(projection.blocks)} exact)`;
 }
 
 function migrationFinding(before, after) {
