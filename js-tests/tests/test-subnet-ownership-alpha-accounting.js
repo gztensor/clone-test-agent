@@ -15,6 +15,12 @@ const FORECAST_BLOCKS = ONE_YEAR_BLOCKS * FORECAST_YEARS;
 const MIGRATION_NAME = "migrate_backfill_historical_alpha_burned";
 const MAINNET_GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03";
 const NETUID_ONE_HISTORICAL_BURN = 661_707_044_125_477n;
+const TAOSWAP_GATE_REFERENCE = new Map([
+  [3, { block: 8_830_031, eta: "18 days" }],
+  [24, { block: 8_830_006, eta: "17 days" }],
+  [39, { block: 8_830_031, eta: "23 days" }],
+  [81, { block: 8_830_031, eta: "9 days" }],
+]);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMP_DIR = path.resolve(__dirname, "..", "temp");
 const BEFORE_JSON = path.join(TEMP_DIR, "subnet-ownership-alpha-before.json");
@@ -158,6 +164,7 @@ async function captureSnapshot(phase) {
     const { netuid } = ownerRow;
     const [
       alphaOutCodec,
+      alphaOutEmissionCodec,
       protocolAlphaCodec,
       burnedAlphaCodec,
       registeredAtCodec,
@@ -167,6 +174,7 @@ async function captureSnapshot(phase) {
     ] =
       await Promise.all([
         api.query.subtensorModule.subnetAlphaOut.at(blockHash, netuid),
+        api.query.subtensorModule.subnetAlphaOutEmission.at(blockHash, netuid),
         optionalAt(api.query.subtensorModule.subnetProtocolAlpha, blockHash, netuid),
         optionalAt(api.query.alphaAssets?.alphaBurned, blockHash, netuid),
         api.query.subtensorModule.networkRegisteredAt.at(blockHash, netuid),
@@ -176,6 +184,7 @@ async function captureSnapshot(phase) {
       ]);
     const rpcKingCodec = await getMostConvictedHotkey(blockHash, netuid);
     const alphaOut = codecBigInt(alphaOutCodec);
+    const alphaOutEmission = codecBigInt(alphaOutEmissionCodec);
     const protocolAlpha = codecBigInt(protocolAlphaCodec);
     const burnedAlpha = codecBigInt(burnedAlphaCodec);
     const pendingRow = pending.get(netuid);
@@ -203,6 +212,27 @@ async function captureSnapshot(phase) {
     const threshold = Number(thresholdBase) / 10;
     const registeredAt = Number(registeredAtCodec.toString());
     const tempo = Number(tempoCodec.toString());
+    const thresholdAtBlock = (targetBlock) => projectedThreshold({
+      phase,
+      snapshotBlock: projectionBlock,
+      targetBlock,
+      alphaOut,
+      alphaOutEmission,
+      burnedAlpha,
+      protocolAlpha,
+    });
+    const gateProjection = projectGate({
+      phase,
+      block: projectionBlock,
+      netuid,
+      tempo,
+      registeredAt,
+      thresholdAtBlock,
+      locks,
+      unlockRate,
+      maturityRate,
+      ownerHotHex: ownerRow.ownerHotHex,
+    });
     const projection = projectTakeover({
       phase,
       block: projectionBlock,
@@ -211,7 +241,7 @@ async function captureSnapshot(phase) {
       lastEpochBlock: Number(codecBigInt(lastEpochBlockCodec)),
       pendingEpochAt: Number(codecBigInt(pendingEpochAtCodec)),
       registeredAt,
-      threshold,
+      thresholdAtBlock,
       locks,
       unlockRate,
       maturityRate,
@@ -242,7 +272,9 @@ async function captureSnapshot(phase) {
       mature: projectionBlock >= registeredAt + ONE_YEAR_BLOCKS,
       tempo,
       projection,
+      gateProjection,
       alphaOut: alphaOut.toString(),
+      alphaOutEmission: alphaOutEmission.toString(),
       burnedAlpha: burnedAlpha.toString(),
       protocolAlpha: protocolAlpha.toString(),
       pendingServer: pendingRow.server.toString(),
@@ -297,6 +329,7 @@ function assertMetadata() {
     ["NetworkRegisteredAt", api.query.subtensorModule?.networkRegisteredAt],
     ["TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
     ["SubnetAlphaOut", api.query.subtensorModule?.subnetAlphaOut],
+    ["SubnetAlphaOutEmission", api.query.subtensorModule?.subnetAlphaOutEmission],
     ["HotkeyLock", api.query.subtensorModule?.hotkeyLock],
     ["DecayingHotkeyLock", api.query.subtensorModule?.decayingHotkeyLock],
     ["OwnerLock", api.query.subtensorModule?.ownerLock],
@@ -395,6 +428,53 @@ async function readOwningColdkeys(blockHash, hotkeys) {
   return result;
 }
 
+function projectedThreshold(params) {
+  const elapsedBlocks = BigInt(Math.max(0, params.targetBlock - params.snapshotBlock));
+  const projectedAlphaOut = params.alphaOut + params.alphaOutEmission * elapsedBlocks;
+  const thresholdBase = params.phase === "before"
+    ? projectedAlphaOut
+    : saturatingSub(projectedAlphaOut, params.burnedAlpha, params.protocolAlpha);
+  return Number(thresholdBase) / 10;
+}
+
+function projectGate(params) {
+  const currentScores = scoreLocks(
+    params.locks,
+    params.block,
+    params.unlockRate,
+    params.maturityRate,
+    params.ownerHotHex
+  );
+  if (currentScores.total >= params.thresholdAtBlock(params.block)) {
+    return { status: "immediate", block: params.block, blocks: 0, conviction: currentScores.total };
+  }
+  if (params.tempo === 0) return { status: "no epochs", block: null, blocks: null };
+
+  const end = params.block + FORECAST_BLOCKS;
+  for (
+    let checkBlock = nextEpochBlock(params);
+    checkBlock <= end;
+    checkBlock += epochPeriod(params.phase, params.tempo)
+  ) {
+    const scores = scoreLocks(
+      params.locks,
+      checkBlock,
+      params.unlockRate,
+      params.maturityRate,
+      params.ownerHotHex
+    );
+    if (scores.total >= params.thresholdAtBlock(checkBlock)) {
+      return {
+        status: "projected",
+        block: checkBlock,
+        blocks: checkBlock - params.block,
+        conviction: scores.total,
+      };
+    }
+  }
+  return { status: `not projected within ${FORECAST_YEARS}y`, block: null, blocks: null };
+}
+
 function projectTakeover(params) {
   const maturityBlock = params.registeredAt + ONE_YEAR_BLOCKS;
   const currentScores = scoreLocks(
@@ -408,7 +488,7 @@ function projectTakeover(params) {
   const currentKingCold = currentKing ? params.owningColdkeys.get(currentKing.hex) : null;
   const canTakeOverNow =
     params.block >= maturityBlock &&
-    currentScores.total >= params.threshold &&
+    currentScores.total >= params.thresholdAtBlock(params.block) &&
     currentKing &&
     currentKingCold &&
     !isDefaultAccount(currentKingCold.hex) &&
@@ -441,7 +521,7 @@ function projectTakeover(params) {
       params.maturityRate,
       params.ownerHotHex
     );
-    if (scores.total < params.threshold) continue;
+    if (scores.total < params.thresholdAtBlock(checkBlock)) continue;
     const king = selectKing(scores);
     if (!king) continue;
     const kingCold = params.owningColdkeys.get(king.hex);
@@ -617,8 +697,9 @@ function renderReport(before, after) {
     `\`10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)\`. Conviction forecasts roll the ` +
     `four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch ` +
     `checks. Clone-local block numbers are rebased onto the preserved mainnet BlockHash window before evaluating ` +
-    `registration age or lock evolution. Forecasts assume no future lock transactions and hold alpha supply/counters ` +
-    `constant. “Not projected” means no ` +
+    `registration age or lock evolution. Forecasts assume no future lock transactions. They increase ` +
+    `\`SubnetAlphaOut\` by the snapshot's constant \`SubnetAlphaOutEmission\` rate while holding future burned and ` +
+    `protocol-owned alpha constant. “Not projected” means no ` +
     `qualifying different-owner king was found in the ${FORECAST_YEARS}-year forecast window.\n\n` +
     taoswapComparison(before, after) +
     changedTakeoverSection(before, after) +
@@ -637,18 +718,20 @@ function renderReport(before, after) {
 }
 
 function taoswapComparison(before, after) {
-  const beforeThree = before.subnets.find((row) => row.netuid === 3);
-  const afterThree = after.subnets.find((row) => row.netuid === 3);
-  if (!beforeThree || !afterThree) return "";
-  return `## Subnet 3 comparison with TaoSwap\n\n` +
-    `At review time, the [TaoSwap conviction page](https://taoswap.org/explore/subnets/3/conviction) ` +
-    `showed approximately \`244.29K α\` conviction against the live pre-upgrade \`281.36K α\` threshold, ` +
-    `with about \`19 days\` still maturing. This clone was exported from a different mainnet block, so its corrected ` +
-    `pre-upgrade snapshot is \`${formatAlphaNumber(beforeThree.totalConviction)} α\` against ` +
-    `\`${formatAlphaNumber(beforeThree.threshold)} α\`, predicting ` +
-    `\`${takeoverInterval(beforeThree.projection)}\`. After the experimental upgrade, subnet 3 requires ` +
-    `\`${formatAlphaNumber(afterThree.threshold)} α\`; the existing conviction already clears that threshold, ` +
-    `so its takeover interval is \`${takeoverInterval(afterThree.projection)}\`.\n\n`;
+  const beforeByNetuid = new Map(before.subnets.map((row) => [row.netuid, row]));
+  const rows = [...TAOSWAP_GATE_REFERENCE].map(([netuid, reference]) => {
+    const row = beforeByNetuid.get(netuid);
+    if (!row) return "";
+    return `| ${netuid} | ${taoswapGateInterval(row.gateProjection)} | ${reference.eta} ` +
+      `(block ${reference.block.toLocaleString("en-US")}) | ${takeoverInterval(row.projection)} | ` +
+      `${shortAccount(row.projection.king)} |\n`;
+  }).join("");
+  return `## TaoSwap gate-estimate comparison\n\n` +
+    `TaoSwap's API field \`gate_eta_days\` forecasts when total conviction reaches the moving 10% threshold. ` +
+    `It is not always the actual owner-change time: the runtime also requires a different-owner hotkey to be king. ` +
+    `The TaoSwap observations below came from its public subnet API near the clone snapshot.\n\n` +
+    `| Netuid | Clone moving-threshold gate ETA | TaoSwap gate ETA | Clone actual takeover ETA | Predicted takeover king |\n` +
+    `|---:|---|---|---|---|\n${rows}\n`;
 }
 
 function changedTakeoverSection(before, after) {
@@ -675,6 +758,12 @@ function takeoverInterval(projection) {
   if (projection.status === "immediate") return "0";
   if (projection.status === "projected") return formatDuration(projection.blocks);
   return projection.status;
+}
+
+function taoswapGateInterval(projection) {
+  if (projection.status !== "projected") return takeoverInterval(projection);
+  const wholeDays = Math.ceil(projection.blocks / BLOCKS_PER_DAY);
+  return `~${wholeDays} days (${formatDuration(projection.blocks)} exact)`;
 }
 
 function migrationFinding(before, after) {
@@ -714,8 +803,8 @@ function ownershipSection(snapshot) {
     `Snapshot clone block: \`${snapshot.block}\`; projection mainnet block: ` +
     `\`${snapshot.projectionBlock ?? snapshot.block}\` (\`${snapshot.blockHash}\`)\n\n` +
     `Unlock rate: \`${snapshot.unlockRate}\`; maturity rate: \`${snapshot.maturityRate}\`\n\n` +
-    `| Netuid | Current owner hotkey | RPC king | Conviction α | Required α | Gate | Mature | Projected takeover | Projected king |\n` +
-    `|---:|---|---|---:|---:|---|---|---|---|\n` +
+    `| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Gate ETA | Mature | Projected takeover | Projected king |\n` +
+    `|---:|---|---|---:|---:|---:|---|---|---|---|---|\n` +
     snapshot.subnets.map(ownershipRow).join("") + `\n`;
 }
 
@@ -727,7 +816,9 @@ function ownershipRow(row) {
     : row.projection.status;
   return `| ${row.netuid} | ${shortAccount(row.ownerHotkey)} | ${shortAccount(row.kingHotkey)} | ` +
     `${formatAlphaNumber(row.totalConviction)} | ${formatAlphaNumber(row.threshold)} | ` +
-    `${row.thresholdMet ? "met" : "not met"} | ${row.mature ? "yes" : "no"} | ${eta} | ` +
+    `${formatAlphaNumber(Number(row.alphaOutEmission) * BLOCKS_PER_DAY / 10)} | ` +
+    `${row.thresholdMet ? "met" : "not met"} | ${takeoverInterval(row.gateProjection)} | ` +
+    `${row.mature ? "yes" : "no"} | ${eta} | ` +
     `${shortAccount(row.projection.king)} |\n`;
 }
 
