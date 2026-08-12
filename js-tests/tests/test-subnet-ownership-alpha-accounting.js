@@ -590,9 +590,22 @@ function renderReport(before, after) {
 }
 
 function migrationFinding(before, after) {
-  if (after.genesisHash === MAINNET_GENESIS || after.alphaDiscrepancies.length === 0) return "";
   const beforeOne = before.subnets.find((row) => row.netuid === 1);
   const afterOne = after.subnets.find((row) => row.netuid === 1);
+  const observedBackfill = BigInt(afterOne.burnedAlpha) - BigInt(beforeOne.burnedAlpha);
+  const backfillApplied =
+    observedBackfill > 0n && observedBackfill * 100n >= NETUID_ONE_HISTORICAL_BURN * 99n;
+  if (backfillApplied) {
+    const comparison = observedBackfill === NETUID_ONE_HISTORICAL_BURN
+      ? "exactly matched"
+      : "closely matched after other generation-rebase corrections";
+    return `> **Migration verification:** the historical-alpha correction applied on the clone despite its ` +
+      `non-mainnet genesis \`${after.genesisHash}\`. Subnet 1 expected approximately ` +
+      `\`+${formatAlpha(NETUID_ONE_HISTORICAL_BURN)} α\` and observed ` +
+      `\`+${formatAlpha(observedBackfill)} α\`; this ${comparison}. After all migrations, ` +
+      `\`${after.alphaDiscrepancies.length}\` subnets exceed 1% discrepancy.\n\n`;
+  }
+  if (after.genesisHash === MAINNET_GENESIS || after.alphaDiscrepancies.length === 0) return "";
   return `> **Critical migration finding:** the clone genesis is \`${after.genesisHash}\`, not the ` +
     `hard-coded mainnet genesis \`${MAINNET_GENESIS}\`. The historical-alpha migration marked itself complete ` +
     `but skipped its corrections. Subnet 1 should have received a historical ` +
