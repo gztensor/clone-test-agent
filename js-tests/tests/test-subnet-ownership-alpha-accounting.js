@@ -132,6 +132,9 @@ async function captureSnapshot(phase) {
     ]);
   const unlockRate = Number(unlockRateCodec.toString());
   const maturityRate = Number(maturityRateCodec.toString());
+  const subnetOwnerCut = Number(
+    (await api.query.subtensorModule.subnetOwnerCut.at(blockHash)).toString()
+  ) / 65_535;
   const netuids = networkEntries
     .filter(([, added]) => added.isTrue)
     .map(([key]) => key.args[0].toNumber())
@@ -170,6 +173,9 @@ async function captureSnapshot(phase) {
       burnedAlphaCodec,
       registeredAtCodec,
       tempoCodec,
+      minerBurnedCodec,
+      recycleOrBurnCodec,
+      ownerCutEnabledCodec,
     ] =
       await Promise.all([
         api.query.subtensorModule.subnetAlphaOut.at(blockHash, netuid),
@@ -178,12 +184,26 @@ async function captureSnapshot(phase) {
         optionalAt(api.query.alphaAssets?.alphaBurned, blockHash, netuid),
         api.query.subtensorModule.networkRegisteredAt.at(blockHash, netuid),
         api.query.subtensorModule.tempo.at(blockHash, netuid),
+        api.query.subtensorModule.minerBurned.at(blockHash, netuid),
+        api.query.subtensorModule.recycleOrBurn.at(blockHash, netuid),
+        api.query.subtensorModule.ownerCutEnabled.at(blockHash, netuid),
       ]);
     const rpcKingCodec = await getMostConvictedHotkey(blockHash, netuid);
     const alphaOut = codecBigInt(alphaOutCodec);
     const alphaOutEmission = codecBigInt(alphaOutEmissionCodec);
     const protocolAlpha = codecBigInt(protocolAlphaCodec);
     const burnedAlpha = codecBigInt(burnedAlphaCodec);
+    const minerBurned = fixedPointNumber(minerBurnedCodec, 32);
+    const recycleOrBurn = recycleOrBurnCodec.toString();
+    const ownerCutEnabled = ownerCutEnabledCodec.isTrue;
+    const minerAlphaEmission = Number(alphaOutEmission) *
+      (ownerCutEnabled ? 1 - subnetOwnerCut : 1) * 0.5;
+    const ownerUidWithheldEmission = minerAlphaEmission * minerBurned;
+    const projectedBurnEmission = recycleOrBurn === "Recycle" ? 0 : ownerUidWithheldEmission;
+    const projectedRecycleEmission = recycleOrBurn === "Recycle" ? ownerUidWithheldEmission : 0;
+    const thresholdBaseGrowth = phase === "before" && recycleOrBurn !== "Recycle"
+      ? Number(alphaOutEmission)
+      : Number(alphaOutEmission) - ownerUidWithheldEmission;
     const pendingRow = pending.get(netuid);
     const pendingAlpha = Object.values(pendingRow).reduce((sum, value) => sum + value, 0n);
     const calculatedStake = saturatingSub(alphaOut, burnedAlpha, protocolAlpha, pendingAlpha);
@@ -217,6 +237,8 @@ async function captureSnapshot(phase) {
       alphaOutEmission,
       burnedAlpha,
       protocolAlpha,
+      projectedBurnEmission,
+      projectedRecycleEmission,
     });
     const projection = projectGate({
       phase,
@@ -257,6 +279,15 @@ async function captureSnapshot(phase) {
       projection,
       alphaOut: alphaOut.toString(),
       alphaOutEmission: alphaOutEmission.toString(),
+      subnetOwnerCut,
+      ownerCutEnabled,
+      minerBurned,
+      recycleOrBurn,
+      minerAlphaEmission,
+      ownerUidWithheldEmission,
+      projectedBurnEmission,
+      projectedRecycleEmission,
+      thresholdBaseGrowth,
       burnedAlpha: burnedAlpha.toString(),
       protocolAlpha: protocolAlpha.toString(),
       pendingServer: pendingRow.server.toString(),
@@ -312,6 +343,10 @@ function assertMetadata() {
     ["TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
     ["SubnetAlphaOut", api.query.subtensorModule?.subnetAlphaOut],
     ["SubnetAlphaOutEmission", api.query.subtensorModule?.subnetAlphaOutEmission],
+    ["SubnetOwnerCut", api.query.subtensorModule?.subnetOwnerCut],
+    ["OwnerCutEnabled", api.query.subtensorModule?.ownerCutEnabled],
+    ["MinerBurned", api.query.subtensorModule?.minerBurned],
+    ["RecycleOrBurn", api.query.subtensorModule?.recycleOrBurn],
     ["HotkeyLock", api.query.subtensorModule?.hotkeyLock],
     ["DecayingHotkeyLock", api.query.subtensorModule?.decayingHotkeyLock],
     ["OwnerLock", api.query.subtensorModule?.ownerLock],
@@ -411,12 +446,16 @@ async function readOwningColdkeys(blockHash, hotkeys) {
 }
 
 function projectedThreshold(params) {
-  const elapsedBlocks = BigInt(Math.max(0, params.targetBlock - params.snapshotBlock));
-  const projectedAlphaOut = params.alphaOut + params.alphaOutEmission * elapsedBlocks;
+  const elapsedBlocks = Math.max(0, params.targetBlock - params.snapshotBlock);
+  const projectedAlphaOut = Number(params.alphaOut) +
+    Number(params.alphaOutEmission) * elapsedBlocks -
+    params.projectedRecycleEmission * elapsedBlocks;
+  const projectedBurnedAlpha = Number(params.burnedAlpha) +
+    params.projectedBurnEmission * elapsedBlocks;
   const thresholdBase = params.phase === "before"
     ? projectedAlphaOut
-    : saturatingSub(projectedAlphaOut, params.burnedAlpha, params.protocolAlpha);
-  return Number(thresholdBase) / 10;
+    : Math.max(0, projectedAlphaOut - projectedBurnedAlpha - Number(params.protocolAlpha));
+  return thresholdBase / 10;
 }
 
 function projectGate(params) {
@@ -600,6 +639,10 @@ function convictionBits(value) {
   return codecBigInt(parsed.bits);
 }
 
+function fixedPointNumber(value, fractionalBits) {
+  return Number(convictionBits(value)) / 2 ** fractionalBits;
+}
+
 function codecBigInt(value) {
   if (value === null || value === undefined) return 0n;
   if (typeof value === "bigint") return value;
@@ -656,9 +699,12 @@ function renderReport(before, after) {
     `\`10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)\`. Conviction forecasts roll the ` +
     `four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch ` +
     `checks. Clone-local block numbers are rebased onto the preserved mainnet BlockHash window before evaluating ` +
-    `registration age or lock evolution. Forecasts assume no future lock transactions. They increase ` +
-    `\`SubnetAlphaOut\` by the snapshot's constant \`SubnetAlphaOutEmission\` rate while holding future burned and ` +
-    `protocol-owned alpha constant. All takeover intervals in this report use this moving-threshold method. ` +
+    `registration age or lock evolution. Forecasts assume no future lock transactions. They extrapolate owner-UID ` +
+    `incentive withholding from the current \`MinerBurned\` fraction: \`SubnetAlphaOutEmission × ` +
+    `(1 - enabled owner cut) × 50% miner share × MinerBurned\`. In burn mode this increases future ` +
+    `\`AlphaBurned\`; in recycle mode it reduces future \`SubnetAlphaOut\`. The current emission, owner-cut, ` +
+    `and withholding rates are held constant, as is future protocol-owned alpha. All takeover intervals in this ` +
+    `report use this moving-threshold method. ` +
     `A takeover prediction also requires the subnet to pass its one-year ownership age gate. ` +
     `A threshold crossing is reported as an ownership change only when the projected king belongs to a different ` +
     `coldkey than the current owner; otherwise the result is \`owner remains king\`. ` +
@@ -767,8 +813,8 @@ function ownershipSection(snapshot) {
     `Snapshot clone block: \`${snapshot.block}\`; projection mainnet block: ` +
     `\`${snapshot.projectionBlock ?? snapshot.block}\` (\`${snapshot.blockHash}\`)\n\n` +
     `Unlock rate: \`${snapshot.unlockRate}\`; maturity rate: \`${snapshot.maturityRate}\`\n\n` +
-    `| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Ownership result | Predicted king |\n` +
-    `|---:|---|---|---:|---:|---:|---|---|---|---|\n` +
+    `| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Owner-UID withheld | Mode | Threshold growth α/day | Gate | Mature | Ownership result | Predicted king |\n` +
+    `|---:|---|---|---:|---:|---:|---|---:|---|---|---|---|\n` +
     snapshot.subnets.map(ownershipRow).join("") + `\n`;
 }
 
@@ -783,7 +829,9 @@ function ownershipRow(row) {
         : row.projection.status;
   return `| ${row.netuid} | ${shortAccount(row.ownerHotkey)} | ${shortAccount(row.kingHotkey)} | ` +
     `${formatAlphaNumber(row.totalConviction)} | ${formatAlphaNumber(row.threshold)} | ` +
-    `${formatAlphaNumber(Number(row.alphaOutEmission) * BLOCKS_PER_DAY / 10)} | ` +
+    `${(row.minerBurned * 100).toFixed(2)}% (${formatAlphaNumber(row.ownerUidWithheldEmission * BLOCKS_PER_DAY)} α/day) | ` +
+    `${row.recycleOrBurn.toLowerCase()} | ` +
+    `${formatAlphaNumber(row.thresholdBaseGrowth * BLOCKS_PER_DAY / 10)} | ` +
     `${row.thresholdMet ? "met" : "not met"} | ${row.mature ? "yes" : "no"} | ${eta} | ` +
     `${shortAccount(row.projection.king)} |\n`;
 }
