@@ -1,313 +1,324 @@
 # Subnet ownership conviction and alpha accounting
 
-Generated: 2026-08-12T18:31:06.228Z
+Generated: 2026-08-12T18:46:39.736Z
 
 ## Run summary
 
 | Phase | Block | Runtime | Migration complete | Subnets | King calculation mismatches | Alpha discrepancies >1% |
 |---|---:|---|---|---:|---:|---:|
 | before | 14 | node-subtensor/443 | false | 128 | 0 | 121 |
-| after | 26 | node-subtensor/445 | true | 128 | 0 | 26 |
+| after | 21 | node-subtensor/445 | true | 128 | 0 | 26 |
 
 > **Migration verification:** the historical-alpha correction applied on the clone despite its non-mainnet genesis `0x57a26328383c75e8d0089bced04da375d90811ad2b0072633efdccfb1bf13c80`. Subnet 1 expected approximately `+661,707.044125477 α` and observed `+661,707.044125477 α`; this exactly matched. After all migrations, `26` subnets exceed 1% discrepancy.
 
-The pre-upgrade ownership threshold is `10% × SubnetAlphaOut`. The post-upgrade threshold is `10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)`. Conviction forecasts roll the four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch checks. Clone-local block numbers are rebased onto the preserved mainnet BlockHash window before evaluating registration age or lock evolution. Forecasts assume no future lock transactions. They increase `SubnetAlphaOut` by the snapshot's constant `SubnetAlphaOutEmission` rate while holding future burned and protocol-owned alpha constant. “Not projected” means no qualifying different-owner king was found in the 10-year forecast window.
+The pre-upgrade ownership threshold is `10% × SubnetAlphaOut`. The post-upgrade threshold is `10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)`. Conviction forecasts roll the four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch checks. Clone-local block numbers are rebased onto the preserved mainnet BlockHash window before evaluating registration age or lock evolution. Forecasts assume no future lock transactions. They increase `SubnetAlphaOut` by the snapshot's constant `SubnetAlphaOutEmission` rate while holding future burned and protocol-owned alpha constant. All takeover intervals in this report use this moving-threshold method. “Not projected” means total conviction did not reach the moving threshold in the 10-year forecast window.
 
 ## TaoSwap gate-estimate comparison
 
-TaoSwap's API field `gate_eta_days` forecasts when total conviction reaches the moving 10% threshold. It is not always the actual owner-change time: the runtime also requires a different-owner hotkey to be king. The TaoSwap observations below came from its public subnet API near the clone snapshot.
+TaoSwap's API field `gate_eta_days` forecasts when total conviction reaches the moving 10% threshold. The TaoSwap observations below came from its public subnet API near the clone snapshot.
 
-| Netuid | Clone moving-threshold gate ETA | TaoSwap gate ETA | Clone actual takeover ETA | Predicted takeover king |
-|---:|---|---|---|---|
-| 3 | 17.1 days | 18 days (block 8,830,031) | 17.1 days | `5E6yHkm…MUpnqG` |
-| 20 | 3.0 days | 3 days (block 8,830,181) | 3.0 days | `5ED4s3B…qpwW2Q` |
-| 24 | 16.8 days | 17 days (block 8,830,006) | 29.6 days | `5ELAvsv…v5WvWX` |
-| 39 | 22.2 days | 23 days (block 8,830,031) | 22.2 days | `5GP7c3f…SWVCMi` |
-| 81 | 8.8 days | 9 days (block 8,830,031) | 8.8 days | `5H47sFL…n4wdDa` |
+| Netuid | Clone moving-threshold takeover ETA | TaoSwap gate ETA | Predicted takeover king |
+|---:|---|---|---|
+| 3 | 17.1 days | 18 days (block 8,830,031) | `5E6yHkm…MUpnqG` |
+| 20 | 3.0 days | 3 days (block 8,830,181) | `5ED4s3B…qpwW2Q` |
+| 24 | 16.8 days | 17 days (block 8,830,006) | `5ELpkVn…e6YVcL` |
+| 39 | 22.2 days | 23 days (block 8,830,031) | `5GP7c3f…SWVCMi` |
+| 81 | 8.8 days | 9 days (block 8,830,031) | `5H47sFL…n4wdDa` |
 
 ## Changed subnet ownership takeover predictions
 
 | Subnet netuid | Predicted takeover time interval before | Predicted takeover king before | Predicted takeover time interval after | Predicted takeover king after |
 |---:|---|---|---|---|
+| 1 | not projected within 10y | — | 0 | `5HCFWvR…1wgDHh` |
 | 3 | 17.1 days | `5E6yHkm…MUpnqG` | 0 | `5E6yHkm…MUpnqG` |
+| 19 | not projected within 10y | — | 0 | `5CK49hD…VAQRfC` |
 | 20 | 3.0 days | `5ED4s3B…qpwW2Q` | 0 | `5ED4s3B…qpwW2Q` |
-| 24 | 29.6 days | `5ELAvsv…v5WvWX` | 29.7 days | `5ELAvsv…v5WvWX` |
+| 24 | 16.8 days | `5ELpkVn…e6YVcL` | 3.5 days | `5ELpkVn…e6YVcL` |
+| 28 | not projected within 10y | — | 0 | `5Evgh9Q…5dco3P` |
 | 39 | 22.2 days | `5GP7c3f…SWVCMi` | 0 | `5GP7c3f…SWVCMi` |
+| 40 | not projected within 10y | — | 0 | `5HijSRH…4aiTUs` |
+| 41 | not projected within 10y | — | 0 | `5FCSevL…2DYkXX` |
+| 47 | not projected within 10y | — | 0 | `5Do5iLB…6TcFut` |
+| 76 | not projected within 10y | — | 0 | `5Cw4E2t…6yu5cs` |
 | 81 | 8.8 days | `5H47sFL…n4wdDa` | 0 | `5H47sFL…n4wdDa` |
+| 91 | not projected within 10y | — | 0 | `5FcCsoB…UCyfsw` |
+| 103 | not projected within 10y | — | 0 | — |
+| 113 | not projected within 10y | — | 0 | `5FRumLA…C3M8uB` |
+| 121 | not projected within 10y | — | 0 | `5EL9y2g…34ZdNf` |
 
 ## Before upgrade: subnet kings and takeover projection
 
-Snapshot clone block: `14`; projection mainnet block: `8829634` (`0x95e5d7f5d037a096774057ba58f5f3c699c4b4bf0a4016e413d0e08f74d20e9a`)
+Snapshot clone block: `14`; projection mainnet block: `8829634` (`0x829ef6599f33c719c82e111d55dabae6f5c416235c56496d3a3a33a67cda2b2d`)
 
 Unlock rate: `934866`; maturity rate: `311622`
 
-| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Gate ETA | Mature | Projected takeover | Projected king |
-|---:|---|---|---:|---:|---:|---|---|---|---|---|
-| 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4781 | 248,442.7267 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 332,852.9356 | 720 | met | 0 | yes | not projected within 10y | — |
-| 3 | `5HdTZQ6…ZXkxmv` | `5E6yHkm…MUpnqG` | 246,383.48 | 280,269.529 | 720 | not met | 17.1 days | yes | 17.1 days (block 8952795) | `5E6yHkm…MUpnqG` |
-| 4 | `5Hp18g9…yMR8FM` | `5Hp18g9…yMR8FM` | 183,019.1165 | 350,341.8679 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 5 | `5GZ2KuT…t3y7iq` | `5GZ2KuT…t3y7iq` | 6,649.8213 | 299,876.9752 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 271,588.5911 | 720 | met | 0 | yes | not projected within 10y | — |
-| 7 | `5ChTwrq…AEt8EE` | `5ChTwrq…AEt8EE` | 3,211.2605 | 312,992.9312 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 303,475.1034 | 720 | met | 0 | yes | not projected within 10y | — |
-| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 394,101.8087 | 720 | met | 0 | yes | not projected within 10y | — |
-| 10 | `5EvNESR…UNCWAW` | `5EvNESR…UNCWAW` | 19,046.8285 | 311,809.96 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 11 | `5ECzcM7…jGyrMS` | `5ECzcM7…jGyrMS` | 46,180.4593 | 298,060.3756 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 12 | `5ELzhHv…S96PCp` | `5ELzhHv…S96PCp` | 3,870.5371 | 336,024.5049 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 13 | `5HBswBt…GSxtgZ` | `5HBswBt…GSxtgZ` | 93,697.0392 | 241,972.7443 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 14 | `5FxbrVD…RmQhq7` | `5FxbrVD…RmQhq7` | 54,413.0324 | 305,920.2258 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 15 | `5DnqbBi…QxT5FW` | `5DnqbBi…QxT5FW` | 1,010.6516 | 128,285.6272 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 16 | `5ECWmM2…KyrbNW` | `5Eo5pyN…JdoSG5` | 4,310.2857 | 29,224.9056 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2137 | 302,563.9344 | 720 | met | 0 | yes | not projected within 10y | — |
-| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 322,151.8358 | 720 | met | 0 | yes | not projected within 10y | — |
-| 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 254,532.5665 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 20 | `5EALa14…1qriNk` | `5ED4s3B…qpwW2Q` | 287,654.6206 | 315,157.2118 | 720 | not met | 3.0 days | yes | 3.0 days (block 8851337) | `5ED4s3B…qpwW2Q` |
-| 21 | `5EqAzby…orQVHp` | `5EqAzby…orQVHp` | 5,839.6288 | 344,633.8945 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 342,468.5079 | 720 | met | 0 | yes | not projected within 10y | — |
-| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.9086 | 404,089.4136 | 720 | met | 0 | yes | not projected within 10y | — |
-| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,761.4236 | 364,168.7385 | 720 | not met | 16.8 days | yes | 29.6 days (block 9043024) | `5ELAvsv…v5WvWX` |
-| 25 | `5F6aRds…6GiZ4D` | `5F6aRds…6GiZ4D` | 323,519.3728 | 411,655.7161 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 26 | `5EHfTi6…Ww3fvP` | `5CCutNm…5ovBbX` | 2,553.3793 | 77,667.1347 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 27 | `5H6Bqkz…tX1mQw` | `5H6Bqkz…tX1mQw` | 29,259.9793 | 321,707.6984 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6214 | 465,262.793 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 29 | `5HHHHHz…4JfZWn` | `5HHHHHz…4JfZWn` | 3,165.9749 | 289,848.5593 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 30 | `5HW12Nv…erK1S1` | `5HW12Nv…erK1S1` | 4,962.5963 | 338,256.6049 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 158,650.0688 | 720 | met | 0 | no | not projected within 10y | — |
-| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 342,720.9833 | 720 | met | 0 | yes | not projected within 10y | — |
-| 33 | `5HinUfk…PYZ8uB` | `5HinUfk…PYZ8uB` | 138,808.5272 | 230,181.9364 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 34 | `5HjBSee…TF68LQ` | `5HjBSee…TF68LQ` | 136,306.8908 | 251,773.5175 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 35 | `5EsmkLf…dP9vVx` | `5EsmkLf…dP9vVx` | 6,183.1015 | 298,851.9928 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 62,787.9239 | 720 | met | 0 | no | not projected within 10y | — |
-| 37 | `5DXqqdr…EEeW4j` | `5DXqqdr…EEeW4j` | 45,507.1511 | 357,254.4216 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 38 | `5HNjFeS…pgBp1n` | `5HNjFeS…pgBp1n` | 38,442.6259 | 147,308.3216 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 39 | `5G3qVaX…6qMmbC` | `5GP7c3f…SWVCMi` | 186,554.9447 | 316,642.3553 | 720 | not met | 22.2 days | yes | 22.2 days (block 8989581) | `5GP7c3f…SWVCMi` |
-| 40 | `5HijSRH…4aiTUs` | `5HijSRH…4aiTUs` | 22,427.8984 | 32,699.3734 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 41 | `5FCSevL…2DYkXX` | `5FCSevL…2DYkXX` | 258,549.3693 | 297,516.1612 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 42 | `5Gbdb5s…vf6jUJ` | `5Gbdb5s…vf6jUJ` | 5,444.0166 | 259,503.1142 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 43 | `5HjMs5J…XJS9HC` | `5HjMs5J…XJS9HC` | 3,451.0692 | 305,277.5885 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 44 | `5FsREvy…1nQkwu` | `5FsREvy…1nQkwu` | 245,862.4495 | 401,236.4799 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 45 | `5Hmiaz4…X674DD` | `5Hmiaz4…X674DD` | 111,019.2915 | 301,174.0442 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 46 | `5CDnZ6o…9QdM6D` | `5CDnZ6o…9QdM6D` | 173,963.1913 | 351,070.6598 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 47 | `5GjN9n3…MfdEWj` | `5Do5iLB…6TcFut` | 98,593.7091 | 129,551.7895 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 48 | `5D2Qc9u…i943ch` | `5D2Qc9u…i943ch` | 101,862.5593 | 310,752.305 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 49 | `5DLYBBC…BnrAgn` | `5DLYBBC…BnrAgn` | 80,451.6023 | 201,786.4081 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 50 | `5DxyiWp…c2sJkD` | `5DxyiWp…c2sJkD` | 212,500.0052 | 323,690.305 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4615 | 369,483.2879 | 720 | met | 0 | yes | not projected within 10y | — |
-| 52 | `5EgfUiH…gLrVuz` | `5EgfUiH…gLrVuz` | 167,638.3546 | 295,210.5071 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 53 | `5DXSBCC…sc1uvJ` | `5DXSBCC…sc1uvJ` | 87,530.2664 | 458,744.3088 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 377,419.4692 | 720 | met | 0 | yes | not projected within 10y | — |
-| 55 | `5DJ5fT1…1KfYVd` | `5DJ5fT1…1KfYVd` | 14,841.8669 | 279,932.5289 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 264,639.4264 | 720 | met | 0 | yes | not projected within 10y | — |
-| 57 | `5Ejcqsb…U3g5MN` | `5Ejcqsb…U3g5MN` | 1,254.307 | 82,576.5111 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 29,729.1291 | 720 | met | 0 | no | not projected within 10y | — |
-| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.7258 | 319,372.1959 | 720 | met | 0 | yes | not projected within 10y | — |
-| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,423.1645 | 373,892.6574 | 720 | met | 0 | yes | not projected within 10y | — |
-| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 436,863.9105 | 720 | met | 0 | yes | not projected within 10y | — |
-| 62 | `5EsNzkZ…kTcicD` | `5EsNzkZ…kTcicD` | 148,964.7262 | 263,936.9639 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 63 | `5GmpedV…RR4e1B` | `5GmpedV…RR4e1B` | 72,397.9924 | 381,725.1354 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7225 | 334,075.8563 | 720 | met | 0 | yes | not projected within 10y | — |
-| 65 | `5DAmVrU…q6mHHL` | `5DAmVrU…q6mHHL` | 171,794.1502 | 322,317.5027 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 335,555.5768 | 720 | met | 0 | yes | not projected within 10y | — |
-| 67 | `5Cm4fAT…koT7Rt` | `5Cm4fAT…koT7Rt` | 522.2833 | 81,822.3006 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,811.4716 | 360,650.413 | 720 | met | 0 | yes | not projected within 10y | — |
-| 69 | `5FWB5CF…qWjkg5` | `5FWB5CF…qWjkg5` | 485.8134 | 112,774.5984 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 70 | `5DFxKep…L6QD6o` | — | 0 | 3,832.1224 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 71 | `5FNVgRn…xEBLo9` | `5FNVgRn…xEBLo9` | 63,565.0864 | 418,511.0678 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,433.7229 | 248,679.3252 | 720 | met | 0 | yes | not projected within 10y | — |
-| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.1049 | 328,037.092 | 720 | met | 0 | yes | not projected within 10y | — |
-| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 333,591.1259 | 720 | met | 0 | yes | not projected within 10y | — |
-| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 350,855.3337 | 720 | met | 0 | yes | not projected within 10y | — |
-| 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 101,467.0381 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 321,182.9798 | 720 | met | 0 | yes | not projected within 10y | — |
-| 78 | `5Fk765B…yDWsuk` | `5Fk765B…yDWsuk` | 525.3312 | 65,003.7487 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 352,217.2967 | 720 | met | 0 | yes | not projected within 10y | — |
-| 80 | `5HTwtyt…2N1Zo6` | `5HTwtyt…2N1Zo6` | 3,993.8813 | 180,579.7602 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 81 | `5F9uEDD…jcQfij` | `5H47sFL…n4wdDa` | 198,529.5915 | 260,434.3932 | 720 | not met | 8.8 days | yes | 8.8 days (block 8892791) | `5H47sFL…n4wdDa` |
-| 82 | `5GNyvcC…yhZHgW` | `5GNyvcC…yhZHgW` | 744.3143 | 63,703.483 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 83 | `5EHGayL…ZH9Q5L` | `5EHGayL…ZH9Q5L` | 8,057.3409 | 265,515.8095 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 84 | `5EjbqZD…kLpVAF` | `5EjbqZD…kLpVAF` | 660.4364 | 57,329.2242 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 85 | `5FR392L…Sgwxhb` | `5FR392L…Sgwxhb` | 143,874.4068 | 250,783.5098 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | 0 | no | not projected within 10y | — |
-| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,808.9605 | 150,726.0582 | 720 | met | 0 | no | not projected within 10y | — |
-| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 345,802.6149 | 720 | met | 0 | yes | not projected within 10y | — |
-| 89 | `5FCN4P1…JBhBLd` | `5FCN4P1…JBhBLd` | 6,094.6321 | 276,393.0852 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 14,011.7393 | 720 | met | 0 | no | not projected within 10y | — |
-| 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,528.1935 | 99,345.2177 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 92 | `5FeHbWK…s4UJGc` | — | 0 | 38,288.0229 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.2761 | 318,020.241 | 720 | met | 0 | yes | not projected within 10y | — |
-| 94 | `5EeKtCK…Ng6Dvj` | `5EeKtCK…Ng6Dvj` | 273.723 | 158,283.2578 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 95 | `5ExqqyE…k7n7HP` | `5ExqqyE…k7n7HP` | 9,024.9977 | 282,349.8049 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.9177 | 67,292.8803 | 720 | met | 0 | no | not projected within 10y | — |
-| 97 | `5EvHrbH…ZrBcxZ` | `5EvHrbH…ZrBcxZ` | 7,940.3318 | 94,169.5694 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,403.3988 | 279,026.8348 | 720 | met | 0 | yes | not projected within 10y | — |
-| 99 | `5FWbrcG…MwSeGD` | — | 0 | 21,753.4329 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,265.807 | 179,979.4096 | 720 | met | 0 | no | not projected within 10y | — |
-| 101 | `5H6Dezn…UAS2Zj` | `5H6Dezn…UAS2Zj` | 13,574.6134 | 230,150.9793 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 102 | `5EEinUE…EqKkC9` | `5EEinUE…EqKkC9` | 2,002.3405 | 84,314.4315 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 103 | `5E529AK…8SbwGV` | — | 0 | 9,667.0397 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 104 | `5Coeuhi…kWYG6y` | `5Coeuhi…kWYG6y` | 3,017.9211 | 306,296.8343 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,542.2244 | 192,217.8635 | 720 | met | 0 | no | not projected within 10y | — |
-| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,897.0215 | 237,698.6761 | 720 | met | 0 | yes | not projected within 10y | — |
-| 107 | `5E4WJ2t…mUT3Ju` | `5E4WJ2t…mUT3Ju` | 41,164.694 | 141,230.9405 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,529.4043 | 153,052.0515 | 720 | met | 0 | no | not projected within 10y | — |
-| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3408 | 140,892.5282 | 720 | met | 0 | no | not projected within 10y | — |
-| 110 | `5CwckYm…2Q9rvp` | `5CwckYm…2Q9rvp` | 9,205.9219 | 249,296.8945 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 111 | `5ExhNF8…NRmaN5` | `5ExhNF8…NRmaN5` | 1,221.605 | 344,269.9712 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 112 | `5E1ohAs…2jFvCt` | `5E1ohAs…2jFvCt` | 9,192.0168 | 186,576.7737 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,417.7827 | 142,647.9254 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 139,459.2219 | 720 | met | 0 | no | not projected within 10y | — |
-| 115 | `5EhTo9A…GZKgTV` | `5EhTo9A…GZKgTV` | 2,942.0083 | 152,749.6977 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 116 | `5CXN6pP…ENsub5` | `5CXN6pP…ENsub5` | 30.4505 | 49,832.7033 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,680.6834 | 157,739.1159 | 720 | met | 0 | yes | not projected within 10y | — |
-| 118 | `5HmP973…7FsmZz` | `5HmP973…7FsmZz` | 118,221.0028 | 202,405.392 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 119 | `5HMwvi1…75JNd4` | `5HMwvi1…75JNd4` | 20,722.5426 | 149,334.0518 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 120 | `5HmYnmU…1Qqzb8` | `5HmYnmU…1Qqzb8` | 72,233.8026 | 254,673.8725 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 276,665.1954 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,469.4307 | 49,483.645 | 720 | met | 0 | no | not projected within 10y | — |
-| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 185,035.9345 | 720 | met | 0 | yes | not projected within 10y | — |
-| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 330,479.0221 | 720 | met | 0 | yes | not projected within 10y | — |
-| 125 | `5CFFoku…Kuydnx` | `5CFFoku…Kuydnx` | 45,923.6629 | 232,582.643 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,563.9071 | 110,764.0577 | 720 | met | 0 | no | not projected within 10y | — |
-| 127 | `5EKrpcq…58gtb5` | `5EKrpcq…58gtb5` | 5,535.6746 | 280,282.4648 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 128 | `5FpsgU3…Ewt9h8` | `5FpsgU3…Ewt9h8` | 3,774.5742 | 267,679.0344 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
+| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Predicted takeover | Predicted king |
+|---:|---|---|---:|---:|---:|---|---|---|---|
+| 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4781 | 248,442.7267 | 720 | not met | yes | not projected within 10y | — |
+| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 332,852.9356 | 720 | met | yes | 0 | `5CFxLBv…juK17J` |
+| 3 | `5HdTZQ6…ZXkxmv` | `5E6yHkm…MUpnqG` | 246,383.48 | 280,269.529 | 720 | not met | yes | 17.1 days (block 8952795) | `5E6yHkm…MUpnqG` |
+| 4 | `5Hp18g9…yMR8FM` | `5Hp18g9…yMR8FM` | 183,019.1165 | 350,341.8679 | 720 | not met | yes | not projected within 10y | — |
+| 5 | `5GZ2KuT…t3y7iq` | `5GZ2KuT…t3y7iq` | 6,649.8213 | 299,876.9752 | 720 | not met | yes | not projected within 10y | — |
+| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 271,588.5911 | 720 | met | yes | 0 | `5CfSg4e…GxJrMA` |
+| 7 | `5ChTwrq…AEt8EE` | `5ChTwrq…AEt8EE` | 3,211.2605 | 312,992.9312 | 720 | not met | yes | not projected within 10y | — |
+| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 303,475.1034 | 720 | met | yes | 0 | `5F6tnxz…tQjw8y` |
+| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 394,101.8087 | 720 | met | yes | 0 | `5Fsbube…4mJJZ9` |
+| 10 | `5EvNESR…UNCWAW` | `5EvNESR…UNCWAW` | 19,046.8285 | 311,809.96 | 720 | not met | yes | not projected within 10y | — |
+| 11 | `5ECzcM7…jGyrMS` | `5ECzcM7…jGyrMS` | 46,180.4593 | 298,060.3756 | 720 | not met | yes | not projected within 10y | — |
+| 12 | `5ELzhHv…S96PCp` | `5ELzhHv…S96PCp` | 3,870.5371 | 336,024.5049 | 720 | not met | yes | not projected within 10y | — |
+| 13 | `5HBswBt…GSxtgZ` | `5HBswBt…GSxtgZ` | 93,697.0392 | 241,972.7443 | 720 | not met | yes | not projected within 10y | — |
+| 14 | `5FxbrVD…RmQhq7` | `5FxbrVD…RmQhq7` | 54,413.0324 | 305,920.2258 | 720 | not met | yes | not projected within 10y | — |
+| 15 | `5DnqbBi…QxT5FW` | `5DnqbBi…QxT5FW` | 1,010.6516 | 128,285.6272 | 720 | not met | no | not projected within 10y | — |
+| 16 | `5ECWmM2…KyrbNW` | `5Eo5pyN…JdoSG5` | 4,310.2857 | 29,224.9056 | 720 | not met | no | not projected within 10y | — |
+| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2137 | 302,563.9344 | 720 | met | yes | 0 | `5E7eSeR…HCen2B` |
+| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 322,151.8358 | 720 | met | yes | 0 | `5DCSySU…NwoWyG` |
+| 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 254,532.5665 | 720 | not met | yes | not projected within 10y | — |
+| 20 | `5EALa14…1qriNk` | `5ED4s3B…qpwW2Q` | 287,654.6206 | 315,157.2118 | 720 | not met | yes | 3.0 days (block 8851337) | `5ED4s3B…qpwW2Q` |
+| 21 | `5EqAzby…orQVHp` | `5EqAzby…orQVHp` | 5,839.6288 | 344,633.8945 | 720 | not met | yes | not projected within 10y | — |
+| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 342,468.5079 | 720 | met | yes | 0 | `5CUu1Qh…oD4dyP` |
+| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.9086 | 404,089.4136 | 720 | met | yes | 0 | `5HKsviv…5rM28H` |
+| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,761.4236 | 364,168.7385 | 720 | not met | yes | 16.8 days (block 8950608) | `5ELpkVn…e6YVcL` |
+| 25 | `5F6aRds…6GiZ4D` | `5F6aRds…6GiZ4D` | 323,519.3728 | 411,655.7161 | 720 | not met | yes | not projected within 10y | — |
+| 26 | `5EHfTi6…Ww3fvP` | `5CCutNm…5ovBbX` | 2,553.3793 | 77,667.1347 | 720 | not met | no | not projected within 10y | — |
+| 27 | `5H6Bqkz…tX1mQw` | `5H6Bqkz…tX1mQw` | 29,259.9793 | 321,707.6984 | 720 | not met | yes | not projected within 10y | — |
+| 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6214 | 465,262.793 | 720 | not met | yes | not projected within 10y | — |
+| 29 | `5HHHHHz…4JfZWn` | `5HHHHHz…4JfZWn` | 3,165.9749 | 289,848.5593 | 720 | not met | yes | not projected within 10y | — |
+| 30 | `5HW12Nv…erK1S1` | `5HW12Nv…erK1S1` | 4,962.5963 | 338,256.6049 | 720 | not met | yes | not projected within 10y | — |
+| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 158,650.0688 | 720 | met | no | 0 | `5CDZ527…pQfftn` |
+| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 342,720.9833 | 720 | met | yes | 0 | `5DWgkCS…uS9Qad` |
+| 33 | `5HinUfk…PYZ8uB` | `5HinUfk…PYZ8uB` | 138,808.5272 | 230,181.9364 | 720 | not met | yes | not projected within 10y | — |
+| 34 | `5HjBSee…TF68LQ` | `5HjBSee…TF68LQ` | 136,306.8908 | 251,773.5175 | 720 | not met | yes | not projected within 10y | — |
+| 35 | `5EsmkLf…dP9vVx` | `5EsmkLf…dP9vVx` | 6,183.1015 | 298,851.9928 | 720 | not met | yes | not projected within 10y | — |
+| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 62,787.9239 | 720 | met | no | 0 | `5Eh5G8B…YWrwmK` |
+| 37 | `5DXqqdr…EEeW4j` | `5DXqqdr…EEeW4j` | 45,507.1511 | 357,254.4216 | 720 | not met | yes | not projected within 10y | — |
+| 38 | `5HNjFeS…pgBp1n` | `5HNjFeS…pgBp1n` | 38,442.6259 | 147,308.3216 | 720 | not met | no | not projected within 10y | — |
+| 39 | `5G3qVaX…6qMmbC` | `5GP7c3f…SWVCMi` | 186,554.9447 | 316,642.3553 | 720 | not met | yes | 22.2 days (block 8989581) | `5GP7c3f…SWVCMi` |
+| 40 | `5HijSRH…4aiTUs` | `5HijSRH…4aiTUs` | 22,427.8984 | 32,699.3734 | 720 | not met | no | not projected within 10y | — |
+| 41 | `5FCSevL…2DYkXX` | `5FCSevL…2DYkXX` | 258,549.3693 | 297,516.1612 | 720 | not met | yes | not projected within 10y | — |
+| 42 | `5Gbdb5s…vf6jUJ` | `5Gbdb5s…vf6jUJ` | 5,444.0166 | 259,503.1142 | 720 | not met | yes | not projected within 10y | — |
+| 43 | `5HjMs5J…XJS9HC` | `5HjMs5J…XJS9HC` | 3,451.0692 | 305,277.5885 | 720 | not met | yes | not projected within 10y | — |
+| 44 | `5FsREvy…1nQkwu` | `5FsREvy…1nQkwu` | 245,862.4495 | 401,236.4799 | 720 | not met | yes | not projected within 10y | — |
+| 45 | `5Hmiaz4…X674DD` | `5Hmiaz4…X674DD` | 111,019.2915 | 301,174.0442 | 720 | not met | yes | not projected within 10y | — |
+| 46 | `5CDnZ6o…9QdM6D` | `5CDnZ6o…9QdM6D` | 173,963.1913 | 351,070.6598 | 720 | not met | yes | not projected within 10y | — |
+| 47 | `5GjN9n3…MfdEWj` | `5Do5iLB…6TcFut` | 98,593.7091 | 129,551.7895 | 720 | not met | no | not projected within 10y | — |
+| 48 | `5D2Qc9u…i943ch` | `5D2Qc9u…i943ch` | 101,862.5593 | 310,752.305 | 720 | not met | yes | not projected within 10y | — |
+| 49 | `5DLYBBC…BnrAgn` | `5DLYBBC…BnrAgn` | 80,451.6023 | 201,786.4081 | 720 | not met | no | not projected within 10y | — |
+| 50 | `5DxyiWp…c2sJkD` | `5DxyiWp…c2sJkD` | 212,500.0052 | 323,690.305 | 720 | not met | yes | not projected within 10y | — |
+| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4615 | 369,483.2879 | 720 | met | yes | 0 | `5FTVrwE…ZouKg1` |
+| 52 | `5EgfUiH…gLrVuz` | `5EgfUiH…gLrVuz` | 167,638.3546 | 295,210.5071 | 720 | not met | yes | not projected within 10y | — |
+| 53 | `5DXSBCC…sc1uvJ` | `5DXSBCC…sc1uvJ` | 87,530.2664 | 458,744.3088 | 720 | not met | yes | not projected within 10y | — |
+| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 377,419.4692 | 720 | met | yes | 0 | `5DUB7kN…L9Wgpr` |
+| 55 | `5DJ5fT1…1KfYVd` | `5DJ5fT1…1KfYVd` | 14,841.8669 | 279,932.5289 | 720 | not met | yes | not projected within 10y | — |
+| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 264,639.4264 | 720 | met | yes | 0 | `5GU4Xkd…1mVXFu` |
+| 57 | `5Ejcqsb…U3g5MN` | `5Ejcqsb…U3g5MN` | 1,254.307 | 82,576.5111 | 720 | not met | no | not projected within 10y | — |
+| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 29,729.1291 | 720 | met | no | 0 | `5EPXZrL…jJ3GHz` |
+| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.7258 | 319,372.1959 | 720 | met | yes | 0 | `5EF9dnw…FjNdve` |
+| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,423.1645 | 373,892.6574 | 720 | met | yes | 0 | `5CXLwkK…hA9rhR` |
+| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 436,863.9105 | 720 | met | yes | 0 | `5ECEsYL…c8jUbn` |
+| 62 | `5EsNzkZ…kTcicD` | `5EsNzkZ…kTcicD` | 148,964.7262 | 263,936.9639 | 720 | not met | yes | not projected within 10y | — |
+| 63 | `5GmpedV…RR4e1B` | `5GmpedV…RR4e1B` | 72,397.9924 | 381,725.1354 | 720 | not met | yes | not projected within 10y | — |
+| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7225 | 334,075.8563 | 720 | met | yes | 0 | `5CS3g6n…Ks2xbV` |
+| 65 | `5DAmVrU…q6mHHL` | `5DAmVrU…q6mHHL` | 171,794.1502 | 322,317.5027 | 720 | not met | yes | not projected within 10y | — |
+| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 335,555.5768 | 720 | met | yes | 0 | `5DRPoRi…MzcpZV` |
+| 67 | `5Cm4fAT…koT7Rt` | `5Cm4fAT…koT7Rt` | 522.2833 | 81,822.3006 | 720 | not met | no | not projected within 10y | — |
+| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,811.4716 | 360,650.413 | 720 | met | yes | 0 | `5CSuegT…4rQbbb` |
+| 69 | `5FWB5CF…qWjkg5` | `5FWB5CF…qWjkg5` | 485.8134 | 112,774.5984 | 720 | not met | no | not projected within 10y | — |
+| 70 | `5DFxKep…L6QD6o` | — | 0 | 3,832.1224 | 720 | not met | no | not projected within 10y | — |
+| 71 | `5FNVgRn…xEBLo9` | `5FNVgRn…xEBLo9` | 63,565.0864 | 418,511.0678 | 720 | not met | yes | not projected within 10y | — |
+| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,433.7229 | 248,679.3252 | 720 | met | yes | 0 | `5DUuFhF…16k2GU` |
+| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.1049 | 328,037.092 | 720 | met | yes | 0 | `5Dnkprj…K8pFhW` |
+| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 333,591.1259 | 720 | met | yes | 0 | `5Dnffft…bXGH7L` |
+| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 350,855.3337 | 720 | met | yes | 0 | `5G1Qj93…sQzs6g` |
+| 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 101,467.0381 | 720 | not met | no | not projected within 10y | — |
+| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 321,182.9798 | 720 | met | yes | 0 | `5DqALXR…DdohsE` |
+| 78 | `5Fk765B…yDWsuk` | `5Fk765B…yDWsuk` | 525.3312 | 65,003.7487 | 720 | not met | no | not projected within 10y | — |
+| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 352,217.2967 | 720 | met | yes | 0 | `5EWwdZB…6HSxoF` |
+| 80 | `5HTwtyt…2N1Zo6` | `5HTwtyt…2N1Zo6` | 3,993.8813 | 180,579.7602 | 720 | not met | no | not projected within 10y | — |
+| 81 | `5F9uEDD…jcQfij` | `5H47sFL…n4wdDa` | 198,529.5915 | 260,434.3932 | 720 | not met | yes | 8.8 days (block 8892791) | `5H47sFL…n4wdDa` |
+| 82 | `5GNyvcC…yhZHgW` | `5GNyvcC…yhZHgW` | 744.3143 | 63,703.483 | 720 | not met | no | not projected within 10y | — |
+| 83 | `5EHGayL…ZH9Q5L` | `5EHGayL…ZH9Q5L` | 8,057.3409 | 265,515.8095 | 720 | not met | yes | not projected within 10y | — |
+| 84 | `5EjbqZD…kLpVAF` | `5EjbqZD…kLpVAF` | 660.4364 | 57,329.2242 | 720 | not met | no | not projected within 10y | — |
+| 85 | `5FR392L…Sgwxhb` | `5FR392L…Sgwxhb` | 143,874.4068 | 250,783.5098 | 720 | not met | yes | not projected within 10y | — |
+| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | no | 0 | — |
+| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,808.9605 | 150,726.0582 | 720 | met | no | 0 | `5Do9743…7cQsN5` |
+| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 345,802.6149 | 720 | met | yes | 0 | `5HK4vbG…LPgXpY` |
+| 89 | `5FCN4P1…JBhBLd` | `5FCN4P1…JBhBLd` | 6,094.6321 | 276,393.0852 | 720 | not met | yes | not projected within 10y | — |
+| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 14,011.7393 | 720 | met | no | 0 | `5EKtGWq…piSTEE` |
+| 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,528.1935 | 99,345.2177 | 720 | not met | no | not projected within 10y | — |
+| 92 | `5FeHbWK…s4UJGc` | — | 0 | 38,288.0229 | 720 | not met | no | not projected within 10y | — |
+| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.2761 | 318,020.241 | 720 | met | yes | 0 | `5DAoDtM…DhfNNK` |
+| 94 | `5EeKtCK…Ng6Dvj` | `5EeKtCK…Ng6Dvj` | 273.723 | 158,283.2578 | 720 | not met | no | not projected within 10y | — |
+| 95 | `5ExqqyE…k7n7HP` | `5ExqqyE…k7n7HP` | 9,024.9977 | 282,349.8049 | 720 | not met | yes | not projected within 10y | — |
+| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.9177 | 67,292.8803 | 720 | met | no | 0 | `5GpKXtt…jWMz8c` |
+| 97 | `5EvHrbH…ZrBcxZ` | `5EvHrbH…ZrBcxZ` | 7,940.3318 | 94,169.5694 | 720 | not met | no | not projected within 10y | — |
+| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,403.3988 | 279,026.8348 | 720 | met | yes | 0 | `5HWVxik…BtFxvK` |
+| 99 | `5FWbrcG…MwSeGD` | — | 0 | 21,753.4329 | 720 | not met | no | not projected within 10y | — |
+| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,265.807 | 179,979.4096 | 720 | met | no | 0 | `5HdSGJg…xTvKfe` |
+| 101 | `5H6Dezn…UAS2Zj` | `5H6Dezn…UAS2Zj` | 13,574.6134 | 230,150.9793 | 720 | not met | yes | not projected within 10y | — |
+| 102 | `5EEinUE…EqKkC9` | `5EEinUE…EqKkC9` | 2,002.3405 | 84,314.4315 | 720 | not met | no | not projected within 10y | — |
+| 103 | `5E529AK…8SbwGV` | — | 0 | 9,667.0397 | 720 | not met | no | not projected within 10y | — |
+| 104 | `5Coeuhi…kWYG6y` | `5Coeuhi…kWYG6y` | 3,017.9211 | 306,296.8343 | 720 | not met | yes | not projected within 10y | — |
+| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,542.2244 | 192,217.8635 | 720 | met | no | 0 | `5HBSExJ…DHHTY4` |
+| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,897.0215 | 237,698.6761 | 720 | met | yes | 0 | `5D7FVSM…ezvyHy` |
+| 107 | `5E4WJ2t…mUT3Ju` | `5E4WJ2t…mUT3Ju` | 41,164.694 | 141,230.9405 | 720 | not met | no | not projected within 10y | — |
+| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,529.4043 | 153,052.0515 | 720 | met | no | 0 | `5CAxp9f…j7oTWh` |
+| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3408 | 140,892.5282 | 720 | met | no | 0 | `5DyQkk4…Vd3XUk` |
+| 110 | `5CwckYm…2Q9rvp` | `5CwckYm…2Q9rvp` | 9,205.9219 | 249,296.8945 | 720 | not met | yes | not projected within 10y | — |
+| 111 | `5ExhNF8…NRmaN5` | `5ExhNF8…NRmaN5` | 1,221.605 | 344,269.9712 | 720 | not met | yes | not projected within 10y | — |
+| 112 | `5E1ohAs…2jFvCt` | `5E1ohAs…2jFvCt` | 9,192.0168 | 186,576.7737 | 720 | not met | yes | not projected within 10y | — |
+| 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,417.7827 | 142,647.9254 | 720 | not met | no | not projected within 10y | — |
+| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 139,459.2219 | 720 | met | no | 0 | `5H1nRfb…KpUKju` |
+| 115 | `5EhTo9A…GZKgTV` | `5EhTo9A…GZKgTV` | 2,942.0083 | 152,749.6977 | 720 | not met | yes | not projected within 10y | — |
+| 116 | `5CXN6pP…ENsub5` | `5CXN6pP…ENsub5` | 30.4505 | 49,832.7033 | 720 | not met | no | not projected within 10y | — |
+| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,680.6834 | 157,739.1159 | 720 | met | yes | 0 | `5DwRMxJ…RozmGE` |
+| 118 | `5HmP973…7FsmZz` | `5HmP973…7FsmZz` | 118,221.0028 | 202,405.392 | 720 | not met | yes | not projected within 10y | — |
+| 119 | `5HMwvi1…75JNd4` | `5HMwvi1…75JNd4` | 20,722.5426 | 149,334.0518 | 720 | not met | yes | not projected within 10y | — |
+| 120 | `5HmYnmU…1Qqzb8` | `5HmYnmU…1Qqzb8` | 72,233.8026 | 254,673.8725 | 720 | not met | yes | not projected within 10y | — |
+| 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 276,665.1954 | 720 | not met | yes | not projected within 10y | — |
+| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,469.4307 | 49,483.645 | 720 | met | no | 0 | `5CfPqfa…dnJyYB` |
+| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 185,035.9345 | 720 | met | yes | 0 | `5GxsywP…Nba82o` |
+| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 330,479.0221 | 720 | met | yes | 0 | `5GZPtUj…AEDjmt` |
+| 125 | `5CFFoku…Kuydnx` | `5CFFoku…Kuydnx` | 45,923.6629 | 232,582.643 | 720 | not met | yes | not projected within 10y | — |
+| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,563.9071 | 110,764.0577 | 720 | met | no | 0 | `5FZD47W…AJ5ggD` |
+| 127 | `5EKrpcq…58gtb5` | `5EKrpcq…58gtb5` | 5,535.6746 | 280,282.4648 | 720 | not met | yes | not projected within 10y | — |
+| 128 | `5FpsgU3…Ewt9h8` | `5FpsgU3…Ewt9h8` | 3,774.5742 | 267,679.0344 | 720 | not met | yes | not projected within 10y | — |
 
 ## After upgrade: subnet kings and takeover projection
 
-Snapshot clone block: `26`; projection mainnet block: `8829646` (`0x8ec1c3b5b991058ac34a6ebc61befcd97f0b59d752b54223411a3a9c13450750`)
+Snapshot clone block: `21`; projection mainnet block: `8829641` (`0x71a13087d7ee8827d5c086f8808481e27453c3667c380e7be4763f5c2becfdc3`)
 
 Unlock rate: `934866`; maturity rate: `311622`
 
-| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Gate ETA | Mature | Projected takeover | Projected king |
-|---:|---|---|---:|---:|---:|---|---|---|---|---|
-| 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4782 | 164,051.1279 | 720 | met | 0 | yes | not projected within 10y | — |
-| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 269,254.988 | 720 | met | 0 | yes | not projected within 10y | — |
-| 3 | `5HdTZQ6…ZXkxmv` | `5E6yHkm…MUpnqG` | 246,388.9401 | 205,971.6071 | 720 | met | 0 | yes | 0 | `5E6yHkm…MUpnqG` |
-| 4 | `5Hp18g9…yMR8FM` | `5Hp18g9…yMR8FM` | 183,019.1165 | 279,299.2767 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 5 | `5GZ2KuT…t3y7iq` | `5GZ2KuT…t3y7iq` | 6,649.8213 | 150,691.8671 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 243,343.9459 | 720 | met | 0 | yes | not projected within 10y | — |
-| 7 | `5ChTwrq…AEt8EE` | `5ChTwrq…AEt8EE` | 3,211.2605 | 307,077.9512 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 218,532.5127 | 720 | met | 0 | yes | not projected within 10y | — |
-| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 264,396.8118 | 720 | met | 0 | yes | not projected within 10y | — |
-| 10 | `5EvNESR…UNCWAW` | `5EvNESR…UNCWAW` | 19,046.7774 | 239,523.7055 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 11 | `5ECzcM7…jGyrMS` | `5ECzcM7…jGyrMS` | 46,180.4593 | 170,547.1559 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 12 | `5ELzhHv…S96PCp` | `5ELzhHv…S96PCp` | 3,870.5371 | 183,812.4397 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 13 | `5HBswBt…GSxtgZ` | `5HBswBt…GSxtgZ` | 93,697.0392 | 181,010.8859 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 14 | `5FxbrVD…RmQhq7` | `5FxbrVD…RmQhq7` | 54,412.8187 | 174,902.9784 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 15 | `5DnqbBi…QxT5FW` | `5DnqbBi…QxT5FW` | 1,010.6516 | 70,976.5699 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 16 | `5ECWmM2…KyrbNW` | `5Eo5pyN…JdoSG5` | 4,310.4021 | 17,664.4146 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.3015 | 257,313.3071 | 720 | met | 0 | yes | not projected within 10y | — |
-| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 270,931.4989 | 720 | met | 0 | yes | not projected within 10y | — |
-| 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 153,946.521 | 720 | met | 0 | yes | not projected within 10y | — |
-| 20 | `5EALa14…1qriNk` | `5ED4s3B…qpwW2Q` | 287,671.9157 | 183,356.5027 | 720 | met | 0 | yes | 0 | `5ED4s3B…qpwW2Q` |
-| 21 | `5EqAzby…orQVHp` | `5EqAzby…orQVHp` | 5,839.6288 | 262,226.1099 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 223,505.4097 | 720 | met | 0 | yes | not projected within 10y | — |
-| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.5326 | 269,832.8056 | 720 | met | 0 | yes | not projected within 10y | — |
-| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,774.1288 | 294,678.9884 | 720 | not met | 3.5 days | yes | 29.7 days (block 9043153) | `5ELAvsv…v5WvWX` |
-| 25 | `5F6aRds…6GiZ4D` | `5F6aRds…6GiZ4D` | 323,519.3728 | 324,387.7702 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 26 | `5EHfTi6…Ww3fvP` | `5CCutNm…5ovBbX` | 2,553.4707 | 66,938.6342 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 27 | `5H6Bqkz…tX1mQw` | `5H6Bqkz…tX1mQw` | 29,259.9793 | 199,148.6014 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6215 | 312,610.365 | 720 | met | 0 | yes | not projected within 10y | — |
-| 29 | `5HHHHHz…4JfZWn` | `5HHHHHz…4JfZWn` | 3,165.9749 | 228,766.824 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 30 | `5HW12Nv…erK1S1` | `5HW12Nv…erK1S1` | 4,962.5963 | 264,942.9257 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 88,756.9692 | 720 | met | 0 | no | not projected within 10y | — |
-| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 331,482.2094 | 720 | met | 0 | yes | not projected within 10y | — |
-| 33 | `5HinUfk…PYZ8uB` | `5HinUfk…PYZ8uB` | 138,808.5272 | 163,021.8729 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 34 | `5HjBSee…TF68LQ` | `5HjBSee…TF68LQ` | 136,306.0611 | 202,475.2707 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 35 | `5EsmkLf…dP9vVx` | `5EsmkLf…dP9vVx` | 6,183.0902 | 262,604.738 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 45,906.5868 | 720 | met | 0 | no | not projected within 10y | — |
-| 37 | `5DXqqdr…EEeW4j` | `5DXqqdr…EEeW4j` | 45,507.1511 | 236,327.477 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 38 | `5HNjFeS…pgBp1n` | `5HNjFeS…pgBp1n` | 38,442.1372 | 88,287.9979 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 39 | `5G3qVaX…6qMmbC` | `5GP7c3f…SWVCMi` | 186,568.9905 | 167,697.8508 | 720 | met | 0 | yes | 0 | `5GP7c3f…SWVCMi` |
-| 40 | `5HijSRH…4aiTUs` | `5HijSRH…4aiTUs` | 22,427.8984 | 12,481.8005 | 720 | met | 0 | no | not projected within 10y | — |
-| 41 | `5FCSevL…2DYkXX` | `5FCSevL…2DYkXX` | 258,549.3693 | 178,421.1751 | 720 | met | 0 | yes | not projected within 10y | — |
-| 42 | `5Gbdb5s…vf6jUJ` | `5Gbdb5s…vf6jUJ` | 5,444.0166 | 216,440.0585 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 43 | `5HjMs5J…XJS9HC` | `5HjMs5J…XJS9HC` | 3,451.0692 | 219,448.9543 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 44 | `5FsREvy…1nQkwu` | `5FsREvy…1nQkwu` | 245,862.4495 | 337,919.2954 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 45 | `5Hmiaz4…X674DD` | `5Hmiaz4…X674DD` | 111,019.2916 | 198,986.6353 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 46 | `5CDnZ6o…9QdM6D` | `5CDnZ6o…9QdM6D` | 173,962.8475 | 249,686.9057 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 47 | `5GjN9n3…MfdEWj` | `5Do5iLB…6TcFut` | 98,594.2392 | 68,395.2628 | 720 | met | 0 | no | not projected within 10y | — |
-| 48 | `5D2Qc9u…i943ch` | `5D2Qc9u…i943ch` | 101,862.5593 | 231,037.7729 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 49 | `5DLYBBC…BnrAgn` | `5DLYBBC…BnrAgn` | 80,451.6023 | 115,932.2403 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 50 | `5DxyiWp…c2sJkD` | `5DxyiWp…c2sJkD` | 212,500.0052 | 272,902.9618 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4611 | 237,049.6522 | 720 | met | 0 | yes | not projected within 10y | — |
-| 52 | `5EgfUiH…gLrVuz` | `5EgfUiH…gLrVuz` | 167,638.3546 | 187,486.4614 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 53 | `5DXSBCC…sc1uvJ` | `5DXSBCC…sc1uvJ` | 87,530.2664 | 398,377.8563 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 316,752.0673 | 720 | met | 0 | yes | not projected within 10y | — |
-| 55 | `5DJ5fT1…1KfYVd` | `5DJ5fT1…1KfYVd` | 14,841.8669 | 238,869.8572 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 185,792.2426 | 720 | met | 0 | yes | not projected within 10y | — |
-| 57 | `5Ejcqsb…U3g5MN` | `5Ejcqsb…U3g5MN` | 1,254.307 | 43,756.511 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 13,533.6523 | 720 | met | 0 | no | not projected within 10y | — |
-| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.5314 | 262,991.1676 | 720 | met | 0 | yes | not projected within 10y | — |
-| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,422.3122 | 306,945.1083 | 720 | met | 0 | yes | not projected within 10y | — |
-| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 347,893.1574 | 720 | met | 0 | yes | not projected within 10y | — |
-| 62 | `5EsNzkZ…kTcicD` | `5EsNzkZ…kTcicD` | 148,964.6775 | 241,210.3741 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 63 | `5GmpedV…RR4e1B` | `5GmpedV…RR4e1B` | 72,397.9924 | 294,470.1532 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7088 | 290,608.6082 | 720 | met | 0 | yes | not projected within 10y | — |
-| 65 | `5DAmVrU…q6mHHL` | `5DAmVrU…q6mHHL` | 171,794.1502 | 228,376.4179 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 239,591.5128 | 720 | met | 0 | yes | not projected within 10y | — |
-| 67 | `5Cm4fAT…koT7Rt` | `5Cm4fAT…koT7Rt` | 522.2833 | 41,033.4326 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,808.8854 | 275,536.218 | 720 | met | 0 | yes | not projected within 10y | — |
-| 69 | `5FWB5CF…qWjkg5` | `5FWB5CF…qWjkg5` | 485.8134 | 78,647.4982 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 70 | `5DFxKep…L6QD6o` | — | 0 | 3,818.5055 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 71 | `5FNVgRn…xEBLo9` | `5FNVgRn…xEBLo9` | 63,565.0864 | 322,297.8954 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,427.3249 | 210,353.1527 | 720 | met | 0 | yes | not projected within 10y | — |
-| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.908 | 181,142.8851 | 720 | met | 0 | yes | not projected within 10y | — |
-| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 270,983.9493 | 720 | met | 0 | yes | not projected within 10y | — |
-| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 270,706.478 | 720 | met | 0 | yes | not projected within 10y | — |
-| 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 53,478.8487 | 720 | met | 0 | no | not projected within 10y | — |
-| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 251,020.1567 | 720 | met | 0 | yes | not projected within 10y | — |
-| 78 | `5Fk765B…yDWsuk` | `5Fk765B…yDWsuk` | 525.3312 | 49,204.0694 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 292,726.3722 | 720 | met | 0 | yes | not projected within 10y | — |
-| 80 | `5HTwtyt…2N1Zo6` | `5HTwtyt…2N1Zo6` | 3,993.8813 | 157,088.5106 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 81 | `5F9uEDD…jcQfij` | `5H47sFL…n4wdDa` | 198,543.9427 | 164,080.5802 | 720 | met | 0 | yes | 0 | `5H47sFL…n4wdDa` |
-| 82 | `5GNyvcC…yhZHgW` | `5GNyvcC…yhZHgW` | 744.3143 | 38,203.8769 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 83 | `5EHGayL…ZH9Q5L` | `5EHGayL…ZH9Q5L` | 8,057.3409 | 210,166.4559 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 84 | `5EjbqZD…kLpVAF` | `5EjbqZD…kLpVAF` | 660.4364 | 50,479.9578 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 85 | `5FR392L…Sgwxhb` | `5FR392L…Sgwxhb` | 143,874.4068 | 194,779.584 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | 0 | no | not projected within 10y | — |
-| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,806.8882 | 80,881.5635 | 720 | met | 0 | no | not projected within 10y | — |
-| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 318,713.3957 | 720 | met | 0 | yes | not projected within 10y | — |
-| 89 | `5FCN4P1…JBhBLd` | `5FCN4P1…JBhBLd` | 6,094.6321 | 197,576.7047 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 2,373.7124 | 720 | met | 0 | no | not projected within 10y | — |
-| 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,527.3363 | 53,891.4961 | 720 | met | 0 | no | not projected within 10y | — |
-| 92 | `5FeHbWK…s4UJGc` | — | 0 | 16,477.739 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.1155 | 208,375.2244 | 720 | met | 0 | yes | not projected within 10y | — |
-| 94 | `5EeKtCK…Ng6Dvj` | `5EeKtCK…Ng6Dvj` | 273.723 | 89,567.0698 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 95 | `5ExqqyE…k7n7HP` | `5ExqqyE…k7n7HP` | 9,024.9977 | 175,510.7202 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.6557 | 38,151.6651 | 720 | met | 0 | no | not projected within 10y | — |
-| 97 | `5EvHrbH…ZrBcxZ` | `5EvHrbH…ZrBcxZ` | 7,940.3318 | 61,957.7691 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,395.9627 | 153,478.9954 | 720 | met | 0 | yes | not projected within 10y | — |
-| 99 | `5FWbrcG…MwSeGD` | — | 0 | 14,554.1728 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,261.744 | 113,125.5907 | 720 | met | 0 | no | not projected within 10y | — |
-| 101 | `5H6Dezn…UAS2Zj` | `5H6Dezn…UAS2Zj` | 13,574.6134 | 134,785.8538 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 102 | `5EEinUE…EqKkC9` | `5EEinUE…EqKkC9` | 2,002.3405 | 56,607.6601 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 103 | `5E529AK…8SbwGV` | — | 0 | 0 | 720 | met | 0 | no | not projected within 10y | — |
-| 104 | `5Coeuhi…kWYG6y` | `5Coeuhi…kWYG6y` | 3,017.9211 | 271,396.5946 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,541.204 | 127,443.6401 | 720 | met | 0 | no | not projected within 10y | — |
-| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,896.8074 | 148,508.7379 | 720 | met | 0 | yes | not projected within 10y | — |
-| 107 | `5E4WJ2t…mUT3Ju` | `5E4WJ2t…mUT3Ju` | 41,164.694 | 76,343.8581 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,525.3065 | 104,888.5634 | 720 | met | 0 | no | not projected within 10y | — |
-| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3302 | 71,199.0627 | 720 | met | 0 | no | not projected within 10y | — |
-| 110 | `5CwckYm…2Q9rvp` | `5CwckYm…2Q9rvp` | 9,205.9219 | 172,476.3365 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 111 | `5ExhNF8…NRmaN5` | `5ExhNF8…NRmaN5` | 1,221.605 | 241,803.0643 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 112 | `5E1ohAs…2jFvCt` | `5E1ohAs…2jFvCt` | 9,192.0168 | 85,442.2213 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,416.7421 | 71,956.1775 | 720 | met | 0 | no | not projected within 10y | — |
-| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 81,438.5132 | 720 | met | 0 | no | not projected within 10y | — |
-| 115 | `5EhTo9A…GZKgTV` | `5EhTo9A…GZKgTV` | 2,942.0083 | 67,001.4404 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 116 | `5CXN6pP…ENsub5` | `5CXN6pP…ENsub5` | 30.4505 | 32,210.3407 | 720 | not met | not projected within 10y | no | not projected within 10y | — |
-| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,681.5812 | 117,793.5953 | 720 | met | 0 | yes | not projected within 10y | — |
-| 118 | `5HmP973…7FsmZz` | `5HmP973…7FsmZz` | 118,220.6342 | 160,563.0863 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 119 | `5HMwvi1…75JNd4` | `5HMwvi1…75JNd4` | 20,722.5426 | 71,681.4632 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 120 | `5HmYnmU…1Qqzb8` | `5HmYnmU…1Qqzb8` | 72,232.8756 | 220,031.8243 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 153,232.2778 | 720 | met | 0 | yes | not projected within 10y | — |
-| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,468.3611 | 20,738.1493 | 720 | met | 0 | no | not projected within 10y | — |
-| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 154,291.3223 | 720 | met | 0 | yes | not projected within 10y | — |
-| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 221,108.9659 | 720 | met | 0 | yes | not projected within 10y | — |
-| 125 | `5CFFoku…Kuydnx` | `5CFFoku…Kuydnx` | 45,923.6629 | 110,671.2881 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,565.7891 | 50,235.0637 | 720 | met | 0 | no | not projected within 10y | — |
-| 127 | `5EKrpcq…58gtb5` | `5EKrpcq…58gtb5` | 5,535.6746 | 165,027.992 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
-| 128 | `5FpsgU3…Ewt9h8` | `5FpsgU3…Ewt9h8` | 3,774.5742 | 245,607.1709 | 720 | not met | not projected within 10y | yes | not projected within 10y | — |
+| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Predicted takeover | Predicted king |
+|---:|---|---|---:|---:|---:|---|---|---|---|
+| 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4781 | 164,050.6279 | 720 | met | yes | 0 | `5HCFWvR…1wgDHh` |
+| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 269,254.488 | 720 | met | yes | 0 | `5CFxLBv…juK17J` |
+| 3 | `5HdTZQ6…ZXkxmv` | `5E6yHkm…MUpnqG` | 246,386.6651 | 205,971.1071 | 720 | met | yes | 0 | `5E6yHkm…MUpnqG` |
+| 4 | `5Hp18g9…yMR8FM` | `5Hp18g9…yMR8FM` | 183,019.1165 | 279,298.7767 | 720 | not met | yes | not projected within 10y | — |
+| 5 | `5GZ2KuT…t3y7iq` | `5GZ2KuT…t3y7iq` | 6,649.8213 | 150,691.3671 | 720 | not met | yes | not projected within 10y | — |
+| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 243,343.4459 | 720 | met | yes | 0 | `5CfSg4e…GxJrMA` |
+| 7 | `5ChTwrq…AEt8EE` | `5ChTwrq…AEt8EE` | 3,211.2605 | 307,077.4512 | 720 | not met | yes | not projected within 10y | — |
+| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 218,532.0127 | 720 | met | yes | 0 | `5F6tnxz…tQjw8y` |
+| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 264,396.3118 | 720 | met | yes | 0 | `5Fsbube…4mJJZ9` |
+| 10 | `5EvNESR…UNCWAW` | `5EvNESR…UNCWAW` | 19,046.7987 | 239,523.2055 | 720 | not met | yes | not projected within 10y | — |
+| 11 | `5ECzcM7…jGyrMS` | `5ECzcM7…jGyrMS` | 46,180.4593 | 170,546.6559 | 720 | not met | yes | not projected within 10y | — |
+| 12 | `5ELzhHv…S96PCp` | `5ELzhHv…S96PCp` | 3,870.5371 | 183,811.9397 | 720 | not met | yes | not projected within 10y | — |
+| 13 | `5HBswBt…GSxtgZ` | `5HBswBt…GSxtgZ` | 93,697.0392 | 181,010.3859 | 720 | not met | yes | not projected within 10y | — |
+| 14 | `5FxbrVD…RmQhq7` | `5FxbrVD…RmQhq7` | 54,412.9077 | 174,902.4784 | 720 | not met | yes | not projected within 10y | — |
+| 15 | `5DnqbBi…QxT5FW` | `5DnqbBi…QxT5FW` | 1,010.6516 | 70,976.0699 | 720 | not met | no | not projected within 10y | — |
+| 16 | `5ECWmM2…KyrbNW` | `5Eo5pyN…JdoSG5` | 4,310.3536 | 17,663.9146 | 720 | not met | no | not projected within 10y | — |
+| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2649 | 257,312.8071 | 720 | met | yes | 0 | `5E7eSeR…HCen2B` |
+| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 270,930.9989 | 720 | met | yes | 0 | `5DCSySU…NwoWyG` |
+| 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 153,946.021 | 720 | met | yes | 0 | `5CK49hD…VAQRfC` |
+| 20 | `5EALa14…1qriNk` | `5ED4s3B…qpwW2Q` | 287,664.7095 | 183,356.0027 | 720 | met | yes | 0 | `5ED4s3B…qpwW2Q` |
+| 21 | `5EqAzby…orQVHp` | `5EqAzby…orQVHp` | 5,839.6288 | 262,225.6099 | 720 | not met | yes | not projected within 10y | — |
+| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 223,504.9097 | 720 | met | yes | 0 | `5CUu1Qh…oD4dyP` |
+| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.6893 | 269,832.3056 | 720 | met | yes | 0 | `5HKsviv…5rM28H` |
+| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,768.835 | 294,678.4884 | 720 | not met | yes | 3.5 days (block 8854873) | `5ELpkVn…e6YVcL` |
+| 25 | `5F6aRds…6GiZ4D` | `5F6aRds…6GiZ4D` | 323,519.3728 | 324,387.2702 | 720 | not met | yes | not projected within 10y | — |
+| 26 | `5EHfTi6…Ww3fvP` | `5CCutNm…5ovBbX` | 2,553.4326 | 66,938.1342 | 720 | not met | no | not projected within 10y | — |
+| 27 | `5H6Bqkz…tX1mQw` | `5H6Bqkz…tX1mQw` | 29,259.9793 | 199,148.1014 | 720 | not met | yes | not projected within 10y | — |
+| 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6214 | 312,609.865 | 720 | met | yes | 0 | `5Evgh9Q…5dco3P` |
+| 29 | `5HHHHHz…4JfZWn` | `5HHHHHz…4JfZWn` | 3,165.9749 | 228,766.324 | 720 | not met | yes | not projected within 10y | — |
+| 30 | `5HW12Nv…erK1S1` | `5HW12Nv…erK1S1` | 4,962.5963 | 264,942.4257 | 720 | not met | yes | not projected within 10y | — |
+| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 88,756.4692 | 720 | met | no | 0 | `5CDZ527…pQfftn` |
+| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 331,481.7094 | 720 | met | yes | 0 | `5DWgkCS…uS9Qad` |
+| 33 | `5HinUfk…PYZ8uB` | `5HinUfk…PYZ8uB` | 138,808.5272 | 163,021.3729 | 720 | not met | yes | not projected within 10y | — |
+| 34 | `5HjBSee…TF68LQ` | `5HjBSee…TF68LQ` | 136,306.4068 | 202,474.7707 | 720 | not met | yes | not projected within 10y | — |
+| 35 | `5EsmkLf…dP9vVx` | `5EsmkLf…dP9vVx` | 6,183.0949 | 262,604.238 | 720 | not met | yes | not projected within 10y | — |
+| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 45,906.0868 | 720 | met | no | 0 | `5Eh5G8B…YWrwmK` |
+| 37 | `5DXqqdr…EEeW4j` | `5DXqqdr…EEeW4j` | 45,507.1511 | 236,326.977 | 720 | not met | yes | not projected within 10y | — |
+| 38 | `5HNjFeS…pgBp1n` | `5HNjFeS…pgBp1n` | 38,442.3408 | 88,287.4979 | 720 | not met | no | not projected within 10y | — |
+| 39 | `5G3qVaX…6qMmbC` | `5GP7c3f…SWVCMi` | 186,563.1381 | 167,697.3508 | 720 | met | yes | 0 | `5GP7c3f…SWVCMi` |
+| 40 | `5HijSRH…4aiTUs` | `5HijSRH…4aiTUs` | 22,427.8984 | 12,481.3005 | 720 | met | no | 0 | `5HijSRH…4aiTUs` |
+| 41 | `5FCSevL…2DYkXX` | `5FCSevL…2DYkXX` | 258,549.3693 | 178,420.6751 | 720 | met | yes | 0 | `5FCSevL…2DYkXX` |
+| 42 | `5Gbdb5s…vf6jUJ` | `5Gbdb5s…vf6jUJ` | 5,444.0166 | 216,439.5585 | 720 | not met | yes | not projected within 10y | — |
+| 43 | `5HjMs5J…XJS9HC` | `5HjMs5J…XJS9HC` | 3,451.0692 | 219,448.4543 | 720 | not met | yes | not projected within 10y | — |
+| 44 | `5FsREvy…1nQkwu` | `5FsREvy…1nQkwu` | 245,862.4495 | 337,918.7954 | 720 | not met | yes | not projected within 10y | — |
+| 45 | `5Hmiaz4…X674DD` | `5Hmiaz4…X674DD` | 111,019.2916 | 198,986.1353 | 720 | not met | yes | not projected within 10y | — |
+| 46 | `5CDnZ6o…9QdM6D` | `5CDnZ6o…9QdM6D` | 173,962.9907 | 249,686.4057 | 720 | not met | yes | not projected within 10y | — |
+| 47 | `5GjN9n3…MfdEWj` | `5Do5iLB…6TcFut` | 98,594.0183 | 68,394.7628 | 720 | met | no | 0 | `5Do5iLB…6TcFut` |
+| 48 | `5D2Qc9u…i943ch` | `5D2Qc9u…i943ch` | 101,862.5593 | 231,037.2729 | 720 | not met | yes | not projected within 10y | — |
+| 49 | `5DLYBBC…BnrAgn` | `5DLYBBC…BnrAgn` | 80,451.6023 | 115,931.7403 | 720 | not met | no | not projected within 10y | — |
+| 50 | `5DxyiWp…c2sJkD` | `5DxyiWp…c2sJkD` | 212,500.0052 | 272,902.4618 | 720 | not met | yes | not projected within 10y | — |
+| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4613 | 237,049.1522 | 720 | met | yes | 0 | `5FTVrwE…ZouKg1` |
+| 52 | `5EgfUiH…gLrVuz` | `5EgfUiH…gLrVuz` | 167,638.3546 | 187,485.9614 | 720 | not met | yes | not projected within 10y | — |
+| 53 | `5DXSBCC…sc1uvJ` | `5DXSBCC…sc1uvJ` | 87,530.2664 | 398,377.3563 | 720 | not met | yes | not projected within 10y | — |
+| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 316,751.5673 | 720 | met | yes | 0 | `5DUB7kN…L9Wgpr` |
+| 55 | `5DJ5fT1…1KfYVd` | `5DJ5fT1…1KfYVd` | 14,841.8669 | 238,869.3572 | 720 | not met | yes | not projected within 10y | — |
+| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 185,791.7426 | 720 | met | yes | 0 | `5GU4Xkd…1mVXFu` |
+| 57 | `5Ejcqsb…U3g5MN` | `5Ejcqsb…U3g5MN` | 1,254.307 | 43,756.011 | 720 | not met | no | not projected within 10y | — |
+| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 13,533.1523 | 720 | met | no | 0 | `5EPXZrL…jJ3GHz` |
+| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.6124 | 262,990.6676 | 720 | met | yes | 0 | `5EF9dnw…FjNdve` |
+| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,422.6674 | 306,944.6083 | 720 | met | yes | 0 | `5CXLwkK…hA9rhR` |
+| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 347,892.6574 | 720 | met | yes | 0 | `5ECEsYL…c8jUbn` |
+| 62 | `5EsNzkZ…kTcicD` | `5EsNzkZ…kTcicD` | 148,964.6978 | 241,209.8741 | 720 | not met | yes | not projected within 10y | — |
+| 63 | `5GmpedV…RR4e1B` | `5GmpedV…RR4e1B` | 72,397.9924 | 294,469.6532 | 720 | not met | yes | not projected within 10y | — |
+| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7145 | 290,608.1082 | 720 | met | yes | 0 | `5CS3g6n…Ks2xbV` |
+| 65 | `5DAmVrU…q6mHHL` | `5DAmVrU…q6mHHL` | 171,794.1502 | 228,375.9179 | 720 | not met | yes | not projected within 10y | — |
+| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 239,591.0128 | 720 | met | yes | 0 | `5DRPoRi…MzcpZV` |
+| 67 | `5Cm4fAT…koT7Rt` | `5Cm4fAT…koT7Rt` | 522.2833 | 41,032.9326 | 720 | not met | no | not projected within 10y | — |
+| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,809.963 | 275,535.718 | 720 | met | yes | 0 | `5CSuegT…4rQbbb` |
+| 69 | `5FWB5CF…qWjkg5` | `5FWB5CF…qWjkg5` | 485.8134 | 78,646.9982 | 720 | not met | no | not projected within 10y | — |
+| 70 | `5DFxKep…L6QD6o` | — | 0 | 3,818.0055 | 720 | not met | no | not projected within 10y | — |
+| 71 | `5FNVgRn…xEBLo9` | `5FNVgRn…xEBLo9` | 63,565.0864 | 322,297.3954 | 720 | not met | yes | not projected within 10y | — |
+| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,429.9907 | 210,352.6527 | 720 | met | yes | 0 | `5DUuFhF…16k2GU` |
+| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.5734 | 181,142.3851 | 720 | met | yes | 0 | `5Dnkprj…K8pFhW` |
+| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 270,983.4493 | 720 | met | yes | 0 | `5Dnffft…bXGH7L` |
+| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 270,705.978 | 720 | met | yes | 0 | `5G1Qj93…sQzs6g` |
+| 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 53,478.3487 | 720 | met | no | 0 | `5Cw4E2t…6yu5cs` |
+| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 251,019.6567 | 720 | met | yes | 0 | `5DqALXR…DdohsE` |
+| 78 | `5Fk765B…yDWsuk` | `5Fk765B…yDWsuk` | 525.3312 | 49,203.5694 | 720 | not met | no | not projected within 10y | — |
+| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 292,725.8722 | 720 | met | yes | 0 | `5EWwdZB…6HSxoF` |
+| 80 | `5HTwtyt…2N1Zo6` | `5HTwtyt…2N1Zo6` | 3,993.8813 | 157,088.0106 | 720 | not met | no | not projected within 10y | — |
+| 81 | `5F9uEDD…jcQfij` | `5H47sFL…n4wdDa` | 198,537.9631 | 164,080.0802 | 720 | met | yes | 0 | `5H47sFL…n4wdDa` |
+| 82 | `5GNyvcC…yhZHgW` | `5GNyvcC…yhZHgW` | 744.3143 | 38,203.3769 | 720 | not met | no | not projected within 10y | — |
+| 83 | `5EHGayL…ZH9Q5L` | `5EHGayL…ZH9Q5L` | 8,057.3409 | 210,165.9559 | 720 | not met | yes | not projected within 10y | — |
+| 84 | `5EjbqZD…kLpVAF` | `5EjbqZD…kLpVAF` | 660.4364 | 50,479.4578 | 720 | not met | no | not projected within 10y | — |
+| 85 | `5FR392L…Sgwxhb` | `5FR392L…Sgwxhb` | 143,874.4068 | 194,779.084 | 720 | not met | yes | not projected within 10y | — |
+| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | no | 0 | — |
+| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,807.7517 | 80,881.0635 | 720 | met | no | 0 | `5Do9743…7cQsN5` |
+| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 318,712.8957 | 720 | met | yes | 0 | `5HK4vbG…LPgXpY` |
+| 89 | `5FCN4P1…JBhBLd` | `5FCN4P1…JBhBLd` | 6,094.6321 | 197,576.2047 | 720 | not met | yes | not projected within 10y | — |
+| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 2,373.2124 | 720 | met | no | 0 | `5EKtGWq…piSTEE` |
+| 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,527.6935 | 53,890.9961 | 720 | met | no | 0 | `5FcCsoB…UCyfsw` |
+| 92 | `5FeHbWK…s4UJGc` | — | 0 | 16,477.239 | 720 | not met | no | not projected within 10y | — |
+| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.1824 | 208,374.7244 | 720 | met | yes | 0 | `5DAoDtM…DhfNNK` |
+| 94 | `5EeKtCK…Ng6Dvj` | `5EeKtCK…Ng6Dvj` | 273.723 | 89,566.5698 | 720 | not met | no | not projected within 10y | — |
+| 95 | `5ExqqyE…k7n7HP` | `5ExqqyE…k7n7HP` | 9,024.9977 | 175,510.2202 | 720 | not met | yes | not projected within 10y | — |
+| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.7648 | 38,151.1651 | 720 | met | no | 0 | `5GpKXtt…jWMz8c` |
+| 97 | `5EvHrbH…ZrBcxZ` | `5EvHrbH…ZrBcxZ` | 7,940.3318 | 61,957.2691 | 720 | not met | no | not projected within 10y | — |
+| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,399.061 | 153,478.4954 | 720 | met | yes | 0 | `5HWVxik…BtFxvK` |
+| 99 | `5FWbrcG…MwSeGD` | — | 0 | 14,553.6728 | 720 | not met | no | not projected within 10y | — |
+| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,263.4369 | 113,125.0907 | 720 | met | no | 0 | `5HdSGJg…xTvKfe` |
+| 101 | `5H6Dezn…UAS2Zj` | `5H6Dezn…UAS2Zj` | 13,574.6134 | 134,785.3538 | 720 | not met | yes | not projected within 10y | — |
+| 102 | `5EEinUE…EqKkC9` | `5EEinUE…EqKkC9` | 2,002.3405 | 56,607.1601 | 720 | not met | no | not projected within 10y | — |
+| 103 | `5E529AK…8SbwGV` | — | 0 | 0 | 720 | met | no | 0 | — |
+| 104 | `5Coeuhi…kWYG6y` | `5Coeuhi…kWYG6y` | 3,017.9211 | 271,396.0946 | 720 | not met | yes | not projected within 10y | — |
+| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,541.6292 | 127,443.1401 | 720 | met | no | 0 | `5HBSExJ…DHHTY4` |
+| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,896.8966 | 148,508.2379 | 720 | met | yes | 0 | `5D7FVSM…ezvyHy` |
+| 107 | `5E4WJ2t…mUT3Ju` | `5E4WJ2t…mUT3Ju` | 41,164.694 | 76,343.3581 | 720 | not met | no | not projected within 10y | — |
+| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,527.0139 | 104,888.0634 | 720 | met | no | 0 | `5CAxp9f…j7oTWh` |
+| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3346 | 71,198.5627 | 720 | met | no | 0 | `5DyQkk4…Vd3XUk` |
+| 110 | `5CwckYm…2Q9rvp` | `5CwckYm…2Q9rvp` | 9,205.9219 | 172,475.8365 | 720 | not met | yes | not projected within 10y | — |
+| 111 | `5ExhNF8…NRmaN5` | `5ExhNF8…NRmaN5` | 1,221.605 | 241,802.5643 | 720 | not met | yes | not projected within 10y | — |
+| 112 | `5E1ohAs…2jFvCt` | `5E1ohAs…2jFvCt` | 9,192.0168 | 85,441.7213 | 720 | not met | yes | not projected within 10y | — |
+| 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,417.1757 | 71,955.6775 | 720 | met | no | 0 | `5FRumLA…C3M8uB` |
+| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 81,438.0132 | 720 | met | no | 0 | `5H1nRfb…KpUKju` |
+| 115 | `5EhTo9A…GZKgTV` | `5EhTo9A…GZKgTV` | 2,942.0083 | 67,000.9404 | 720 | not met | yes | not projected within 10y | — |
+| 116 | `5CXN6pP…ENsub5` | `5CXN6pP…ENsub5` | 30.4505 | 32,209.8407 | 720 | not met | no | not projected within 10y | — |
+| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,681.2071 | 117,793.0953 | 720 | met | yes | 0 | `5DwRMxJ…RozmGE` |
+| 118 | `5HmP973…7FsmZz` | `5HmP973…7FsmZz` | 118,220.7878 | 160,562.5863 | 720 | not met | yes | not projected within 10y | — |
+| 119 | `5HMwvi1…75JNd4` | `5HMwvi1…75JNd4` | 20,722.5426 | 71,680.9632 | 720 | not met | yes | not projected within 10y | — |
+| 120 | `5HmYnmU…1Qqzb8` | `5HmYnmU…1Qqzb8` | 72,233.2618 | 220,031.3243 | 720 | not met | yes | not projected within 10y | — |
+| 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 153,231.7778 | 720 | met | yes | 0 | `5EL9y2g…34ZdNf` |
+| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,468.8067 | 20,737.6493 | 720 | met | no | 0 | `5CfPqfa…dnJyYB` |
+| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 154,290.8223 | 720 | met | yes | 0 | `5GxsywP…Nba82o` |
+| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 221,108.4659 | 720 | met | yes | 0 | `5GZPtUj…AEDjmt` |
+| 125 | `5CFFoku…Kuydnx` | `5CFFoku…Kuydnx` | 45,923.6629 | 110,670.7881 | 720 | not met | yes | not projected within 10y | — |
+| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,565.005 | 50,234.5637 | 720 | met | no | 0 | `5FZD47W…AJ5ggD` |
+| 127 | `5EKrpcq…58gtb5` | `5EKrpcq…58gtb5` | 5,535.6746 | 165,027.492 | 720 | not met | yes | not projected within 10y | — |
+| 128 | `5FpsgU3…Ewt9h8` | `5FpsgU3…Ewt9h8` | 3,774.5742 | 245,606.6709 | 720 | not met | yes | not projected within 10y | — |
 
 ## Before upgrade: staked alpha consistency
 
@@ -446,134 +457,134 @@ Unlock rate: `934866`; maturity rate: `311622`
 
 | Netuid | AlphaOut α | Burned α | Protocol α | Pending α | Actual staked α | Calculated staked α | Δ α | Δ % | Result |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | 2,484,439.267183304 | 826,743.498270167 | 17,184.489564018 | 17.560874689 | 1,659,802.387982222 | 1,640,493.71847443 | +19,308.669507792 | 1.1770% | **DISCREPANCY >1%** |
-| 2 | 3,328,541.356043044 | 635,713.572381259 | 277.903743213 | 182.50085112 | 2,711,313.00299156 | 2,692,367.379067452 | +18,945.623924108 | 0.7036% | OK |
-| 3 | 2,802,713.941013925 | 578,475.334942498 | 164,522.535312881 | 182.126595313 | 2,078,448.8879906 | 2,059,533.944163233 | +18,914.943827367 | 0.9184% | OK |
-| 4 | 3,503,436.936193613 | 553,023.967435256 | 157,420.201494415 | 183.029751142 | 2,811,300.435005442 | 2,792,809.7375128 | +18,490.697492642 | 0.6620% | OK |
-| 5 | 2,998,782.621176459 | 1,488,257.228963462 | 3,606.721507634 | 184.281869893 | 1,525,624.786765432 | 1,506,734.38883547 | +18,890.397929962 | 1.2537% | **DISCREPANCY >1%** |
-| 6 | 2,715,897.911458657 | 185,360.665463109 | 97,097.786802825 | 187.346869942 | 2,451,996.683773013 | 2,433,252.112322781 | +18,744.571450232 | 0.7703% | OK |
-| 7 | 3,129,941.311512733 | 36,084.978602376 | 23,076.821212896 | 187.07538846 | 3,089,552.962272271 | 3,070,592.436309001 | +18,960.52596327 | 0.6174% | OK |
-| 8 | 3,034,769.721682194 | 780,868.154271859 | 68,576.440307564 | 187.086928478 | 2,204,088.317242778 | 2,185,138.040174293 | +18,950.277068485 | 0.8672% | OK |
-| 9 | 3,941,032.310704428 | 1,134,490.320449541 | 162,573.872641873 | 188.118320391 | 2,662,702.753243412 | 2,643,779.999292623 | +18,922.753950789 | 0.7157% | OK |
-| 10 | 3,118,111.600023772 | 718,954.77036203 | 3,919.775094447 | 189.688883091 | 2,413,820.773748008 | 2,395,047.365684204 | +18,773.408063804 | 0.7838% | OK |
-| 11 | 2,980,618.093933277 | 1,145,934.992162841 | 129,211.542495645 | 190.661334505 | 1,724,261.701431808 | 1,705,280.897940286 | +18,980.803491522 | 1.1130% | **DISCREPANCY >1%** |
-| 12 | 3,360,257.048608388 | 1,522,132.651258694 | 0 | 192.292697978 | 1,856,786.281218517 | 1,837,932.104651716 | +18,854.176566801 | 1.0258% | **DISCREPANCY >1%** |
-| 13 | 2,419,739.443340406 | 593,048.370031793 | 16,582.21426827 | 192.761479014 | 1,828,953.545731635 | 1,809,916.097561329 | +19,037.448170306 | 1.0518% | **DISCREPANCY >1%** |
-| 14 | 3,059,214.25751119 | 1,180,371.405325601 | 129,813.067943654 | 193.278374918 | 1,767,865.10047261 | 1,748,836.505867017 | +19,028.594605593 | 1.0880% | **DISCREPANCY >1%** |
-| 15 | 1,282,872.56679433 | 354,654.991781899 | 218,451.876252734 | 194.096217236 | 716,745.344324384 | 709,571.602542461 | +7,173.741781923 | 1.0109% | **DISCREPANCY >1%** |
-| 16 | 292,261.056082386 | 106,491.578931276 | 9,125.331581653 | 196.086571486 | 219,971.692133916 | 176,448.058997971 | +43,523.633135945 | 24.6665% | **DISCREPANCY >1%** |
-| 17 | 3,025,655.555837639 | 340,475.604612198 | 112,046.880703239 | 196.357595968 | 2,591,753.716854974 | 2,572,936.712926234 | +18,817.00392874 | 0.7313% | OK |
-| 18 | 3,221,530.3581729 | 327,278.331731401 | 184,937.037344576 | 433.502768747 | 2,728,012.390175507 | 2,708,881.486328176 | +19,130.903847331 | 0.7062% | OK |
-| 19 | 2,545,337.931587017 | 1,005,152.040322882 | 720.680861435 | 198.424919891 | 1,558,366.405120635 | 1,539,266.785482809 | +19,099.619637826 | 1.2408% | **DISCREPANCY >1%** |
-| 20 | 3,151,584.118117668 | 1,318,019.090795353 | 0 | 200.646865467 | 1,852,324.660431886 | 1,833,364.380456848 | +18,960.279975038 | 1.0341% | **DISCREPANCY >1%** |
-| 21 | 3,446,350.944539729 | 811,563.250445903 | 12,526.594993624 | 201.583376045 | 2,641,137.2895972 | 2,622,059.515724157 | +19,077.773873043 | 0.7275% | OK |
-| 22 | 3,424,697.078972077 | 1,181,104.166041112 | 8,538.815663423 | 202.742051089 | 2,253,922.90864158 | 2,234,851.355216453 | +19,071.553425127 | 0.8533% | OK |
-| 23 | 4,040,906.136284042 | 1,085,012.60808004 | 257,565.47245039 | 203.241550689 | 2,717,035.06015898 | 2,698,124.814202923 | +18,910.245956057 | 0.7008% | OK |
-| 24 | 3,641,699.385197894 | 581,611.381123771 | 113,298.120046902 | 204.496276093 | 2,964,647.656840732 | 2,946,585.387751128 | +18,062.269089604 | 0.6129% | OK |
-| 25 | 4,116,569.160734956 | 872,691.458855825 | 0 | 204.348350575 | 3,262,570.098652547 | 3,243,673.353528556 | +18,896.745123991 | 0.5825% | OK |
-| 26 | 776,683.346869401 | 91,065.541425466 | 16,231.463886896 | 205.885745795 | 673,306.86442606 | 669,180.455811244 | +4,126.408614816 | 0.6166% | OK |
-| 27 | 3,217,088.984189999 | 1,225,488.394288307 | 114.576078423 | 209.326060384 | 2,010,230.893396306 | 1,991,276.687762885 | +18,954.205633421 | 0.9518% | OK |
-| 28 | 4,652,644.532050518 | 1,380,136.946029568 | 146,403.936158282 | 207.21018716 | 3,144,789.333292944 | 3,125,896.439675508 | +18,892.893617436 | 0.6043% | OK |
-| 29 | 2,898,497.592659301 | 610,829.352749762 | 0 | 209.726660942 | 2,306,335.831049477 | 2,287,458.513248597 | +18,877.31780088 | 0.8252% | OK |
-| 30 | 3,382,578.048550954 | 710,234.099517005 | 22,914.692387486 | 210.461152384 | 2,667,110.572279116 | 2,649,218.795494079 | +17,891.776785037 | 0.6753% | OK |
-| 31 | 1,586,512.687500347 | 660,846.230518782 | 38,096.765184011 | 210.694922304 | 893,531.693731475 | 887,358.99687525 | +6,172.696856225 | 0.6956% | OK |
-| 32 | 3,427,221.832587246 | 17,419.272873098 | 94,980.465258985 | 212.895902564 | 3,333,422.893428039 | 3,314,609.198552599 | +18,813.69487544 | 0.5675% | OK |
-| 33 | 2,301,832.10795105 | 584,226.582883127 | 87,386.796338192 | 213.090754801 | 1,649,218.144611554 | 1,630,005.63797493 | +19,212.506636624 | 1.1786% | **DISCREPANCY >1%** |
-| 34 | 2,517,752.315278414 | 359,469.273754254 | 133,530.334947542 | 213.353990338 | 2,043,591.427143987 | 2,024,539.35258628 | +19,052.074557707 | 0.9410% | OK |
-| 35 | 2,988,531.927713479 | 266,886.343998939 | 95,598.20397956 | 216.133908799 | 2,644,675.94827133 | 2,625,831.245826181 | +18,844.702445149 | 0.7176% | OK |
-| 36 | 627,891.239072002 | 131,286.518958231 | 37,538.851627533 | 217.003480302 | 464,701.809419829 | 458,848.865005936 | +5,852.944413893 | 1.2755% | **DISCREPANCY >1%** |
-| 37 | 3,572,556.215572503 | 1,209,281.44508295 | 0 | 217.373593954 | 2,381,932.136047951 | 2,363,057.396895599 | +18,874.739152352 | 0.7987% | OK |
-| 38 | 1,473,097.928631893 | 485,297.062238848 | 104,920.887231971 | 862.101524195 | 886,266.551300017 | 882,017.877636879 | +4,248.673663138 | 0.4816% | OK |
-| 39 | 3,166,435.553195886 | 1,460,083.628868387 | 29,373.416255258 | 218.780998106 | 1,695,429.468557074 | 1,676,759.727074135 | +18,669.741482939 | 1.1134% | **DISCREPANCY >1%** |
-| 40 | 327,005.733918726 | 74,153.423804429 | 128,034.305600759 | 219.517385171 | 176,741.448835177 | 124,598.487128367 | +52,142.96170681 | 41.8487% | **DISCREPANCY >1%** |
-| 41 | 2,975,173.611654056 | 973,744.279818439 | 217,217.580368984 | 220.976763389 | 1,802,863.651482052 | 1,783,990.774703244 | +18,872.876778808 | 1.0579% | **DISCREPANCY >1%** |
-| 42 | 2,595,043.142096049 | 430,642.557214966 | 0 | 222.919954598 | 2,183,122.943907032 | 2,164,177.664926485 | +18,945.278980547 | 0.8754% | OK |
-| 43 | 3,052,787.884567396 | 857,879.953518064 | 418.387877525 | 223.016150179 | 2,212,435.691834392 | 2,194,266.527021628 | +18,169.164812764 | 0.8280% | OK |
-| 44 | 4,012,383.551801857 | 506,394.124946002 | 126,796.473143805 | 223.029336224 | 3,398,459.104068 | 3,378,969.924375826 | +19,489.179692174 | 0.5767% | OK |
-| 45 | 3,011,752.442172559 | 1,021,886.089454556 | 0 | 226.877745717 | 2,008,703.116929344 | 1,989,639.474972286 | +19,063.641957058 | 0.9581% | OK |
-| 46 | 3,510,718.597918791 | 920,454.734537479 | 93,394.806384354 | 226.017693824 | 2,515,548.15997582 | 2,496,643.039303134 | +18,905.120672686 | 0.7572% | OK |
-| 47 | 1,295,529.895427735 | 588,653.185177574 | 22,924.082606544 | 227.661885449 | 687,673.465762526 | 683,724.965758168 | +3,948.500004358 | 0.5774% | OK |
-| 48 | 3,107,535.04985937 | 695,492.461656953 | 101,664.859193657 | 228.700853047 | 2,328,846.687272452 | 2,310,149.028155713 | +18,697.659116739 | 0.8093% | OK |
-| 49 | 2,017,876.634681782 | 694,094.772062343 | 164,459.459888716 | 228.470969132 | 1,164,300.147403006 | 1,159,093.931761591 | +5,206.215641415 | 0.4491% | OK |
-| 50 | 3,236,915.049890369 | 467,621.462714429 | 40,263.969667629 | 229.870419954 | 2,747,775.456897652 | 2,728,799.747088357 | +18,975.709809295 | 0.6953% | OK |
-| 51 | 3,694,851.631985679 | 1,171,146.945421614 | 153,208.16449757 | 230.01488151 | 2,389,201.875098131 | 2,370,266.507184985 | +18,935.367913146 | 0.7988% | OK |
-| 52 | 2,952,117.070821844 | 1,077,162.060889068 | 90.395967424 | 231.761205215 | 1,893,408.234763284 | 1,874,632.852760137 | +18,775.382003147 | 1.0015% | **DISCREPANCY >1%** |
-| 53 | 4,587,461.932000767 | 520,242.333818612 | 83,441.035627469 | 232.14106949 | 4,002,412.306866003 | 3,983,546.421485196 | +18,865.885380807 | 0.4735% | OK |
-| 54 | 3,774,206.691772849 | 562,924.886719164 | 43,761.132345373 | 234.262086152 | 3,186,263.949667802 | 3,167,286.41062216 | +18,977.539045642 | 0.5991% | OK |
-| 55 | 2,799,337.289393601 | 316,092.836118957 | 94,545.881062638 | 236.134605077 | 2,407,570.599805009 | 2,388,462.437606929 | +19,108.16219808 | 0.8000% | OK |
-| 56 | 2,646,406.264136623 | 774,485.915914827 | 13,997.922202342 | 235.282503571 | 1,876,658.38095267 | 1,857,687.143515883 | +18,971.237436787 | 1.0212% | **DISCREPANCY >1%** |
-| 57 | 825,777.111178675 | 317,596.320183395 | 70,615.680938887 | 236.648963665 | 442,264.988899287 | 437,328.461092728 | +4,936.527806559 | 1.1287% | **DISCREPANCY >1%** |
-| 58 | 297,303.290570974 | 161,966.767161337 | 0 | 87.223144206 | 228,682.61780516 | 135,249.300265431 | +93,433.317539729 | 69.0822% | **DISCREPANCY >1%** |
-| 59 | 3,193,733.959417721 | 440,939.168981065 | 122,883.114116497 | 241.495433091 | 2,648,586.34800194 | 2,629,670.180887068 | +18,916.167114872 | 0.7193% | OK |
-| 60 | 3,738,938.573624944 | 628,958.607866544 | 40,528.882878666 | 240.011153443 | 3,088,309.198855045 | 3,069,211.071726291 | +19,098.127128754 | 0.6222% | OK |
-| 61 | 4,368,654.580516954 | 808,370.14496251 | 81,352.861757921 | 240.599154604 | 3,497,985.843054945 | 3,478,690.974641919 | +19,294.868413026 | 0.5546% | OK |
-| 62 | 2,639,385.218720129 | 184,174.273336392 | 43,107.204457328 | 241.315194522 | 2,431,187.062364878 | 2,411,862.425731887 | +19,324.636632991 | 0.8012% | OK |
-| 63 | 3,817,266.520907545 | 725,439.396179942 | 147,125.592639154 | 242.616747333 | 2,963,791.083203702 | 2,944,458.915341116 | +19,332.167862586 | 0.6565% | OK |
-| 64 | 3,340,777.411197862 | 267,933.276542149 | 166,758.052181327 | 243.063767935 | 2,925,100.024232174 | 2,905,843.018706451 | +19,257.005525723 | 0.6626% | OK |
-| 65 | 3,223,187.02667184 | 939,351.125453697 | 71.722624687 | 246.953625556 | 2,290,879.611105601 | 2,283,517.2249679 | +7,362.386137701 | 0.3224% | OK |
-| 66 | 3,355,567.767963545 | 876,389.726869251 | 83,262.913449555 | 246.876365658 | 2,399,574.013147158 | 2,395,668.251279081 | +3,905.761868077 | 0.1630% | OK |
-| 67 | 818,235.005618122 | 275,635.793013465 | 132,264.88633962 | 246.548133058 | 415,753.341684633 | 410,087.778131979 | +5,665.563552654 | 1.3815% | **DISCREPANCY >1%** |
-| 68 | 3,606,522.668691282 | 681,206.505097183 | 169,953.983458605 | 247.156427254 | 2,757,678.262310717 | 2,755,115.02370824 | +2,563.238602477 | 0.0930% | OK |
-| 69 | 1,127,757.983729383 | 281,678.898945926 | 59,604.102841208 | 248.154576627 | 789,692.225967185 | 786,226.827365622 | +3,465.398601563 | 0.4407% | OK |
-| 70 | 38,333.22374926 | 148.169094182 | 0 | 184.182726666 | 38,149.040995632 | 38,000.871928412 | +148.16906722 | 0.3899% | OK |
-| 71 | 4,185,122.677766843 | 876,438.347763752 | 85,705.37638208 | 251.451983433 | 3,225,073.636749908 | 3,222,727.501637578 | +2,346.13511233 | 0.0727% | OK |
-| 72 | 2,486,805.251902087 | 383,273.725113362 | 0 | 252.603932758 | 2,105,694.740466461 | 2,103,278.922855967 | +2,415.817610494 | 0.1148% | OK |
-| 73 | 3,280,382.920420528 | 1,468,954.069047113 | 0 | 253.105893961 | 1,813,676.942884909 | 1,811,175.745479454 | +2,501.197405455 | 0.1380% | OK |
-| 74 | 3,335,923.259227667 | 531,791.422968235 | 94,292.343237338 | 254.35601268 | 2,712,295.874311409 | 2,709,585.137009414 | +2,710.737301995 | 0.1000% | OK |
-| 75 | 3,508,571.510438891 | 784,604.879643725 | 16,901.85128484 | 254.228181401 | 2,709,395.891317406 | 2,706,810.551328925 | +2,585.339988481 | 0.0955% | OK |
-| 76 | 1,014,682.381470641 | 475,840.83810665 | 4,053.056546057 | 256.707430109 | 539,215.189087256 | 534,531.779387825 | +4,683.409699431 | 0.8761% | OK |
-| 77 | 3,211,841.798076511 | 140,886.89655137 | 560,753.334406754 | 256.999075618 | 2,512,507.442349621 | 2,509,944.568042769 | +2,562.874306852 | 0.1021% | OK |
-| 78 | 650,049.486811965 | 64,569.373140067 | 93,439.420139376 | 258.779702543 | 497,791.007489218 | 491,781.913829979 | +6,009.093659239 | 1.2219% | **DISCREPANCY >1%** |
-| 79 | 3,522,187.617118924 | 444,229.939659842 | 150,693.955844108 | 258.600830648 | 2,929,780.461334615 | 2,927,005.120784326 | +2,775.340550289 | 0.0948% | OK |
-| 80 | 1,805,809.602432742 | 192,549.794495279 | 42,374.70227022 | 259.090831526 | 1,575,661.087864241 | 1,570,626.014835717 | +5,035.073028524 | 0.3205% | OK |
-| 81 | 2,604,358.570862377 | 851,302.349232435 | 112,250.420057044 | 260.414012873 | 1,643,122.255968379 | 1,640,545.387560025 | +2,576.868408354 | 0.1570% | OK |
-| 82 | 637,046.829536987 | 51,351.621683119 | 203,656.438410755 | 261.745850215 | 387,646.14878236 | 381,777.023592898 | +5,869.125189462 | 1.5373% | **DISCREPANCY >1%** |
-| 83 | 2,655,170.094539082 | 345,172.824104195 | 208,332.711813588 | 262.256934008 | 2,105,495.312152469 | 2,101,402.301687291 | +4,093.010465178 | 0.1947% | OK |
-| 84 | 573,304.241545722 | 43,139.508392941 | 25,365.155475257 | 262.999999435 | 499,568.25457856 | 504,536.577678089 | -4,968.323099529 | 0.9847% | OK |
-| 85 | 2,507,847.285496776 | 496,360.999970373 | 63,690.445726782 | 265.014358231 | 1,950,373.413274667 | 1,947,530.82544139 | +2,842.587833277 | 0.1459% | OK |
+| 1 | 2,484,434.267183304 | 826,743.498270167 | 17,184.489564018 | 13.037807436 | 1,659,801.911049485 | 1,640,493.241541683 | +19,308.669507802 | 1.1770% | **DISCREPANCY >1%** |
+| 2 | 3,328,536.356043044 | 635,713.572381259 | 277.903743213 | 177.500851132 | 2,711,313.00299156 | 2,692,367.37906744 | +18,945.62392412 | 0.7036% | OK |
+| 3 | 2,802,706.169750713 | 578,475.334942498 | 164,519.764049669 | 177.126595325 | 2,078,448.8879906 | 2,059,533.944163221 | +18,914.943827379 | 0.9184% | OK |
+| 4 | 3,503,429.328918866 | 553,023.967435256 | 157,417.594219668 | 178.029751152 | 2,811,300.435005442 | 2,792,809.73751279 | +18,490.697492652 | 0.6620% | OK |
+| 5 | 2,998,777.258856604 | 1,488,257.228963462 | 3,606.359187779 | 179.281869903 | 1,525,624.786765432 | 1,506,734.38883546 | +18,890.397929972 | 1.2537% | **DISCREPANCY >1%** |
+| 6 | 2,715,892.911458657 | 185,360.665463109 | 97,097.786802825 | 182.346869952 | 2,451,996.683773013 | 2,433,252.112322771 | +18,744.571450242 | 0.7703% | OK |
+| 7 | 3,129,936.311512733 | 36,084.978602376 | 23,076.821212896 | 182.075388471 | 3,089,552.962272271 | 3,070,592.43630899 | +18,960.525963281 | 0.6174% | OK |
+| 8 | 3,034,761.934952331 | 780,868.154271859 | 68,573.653577701 | 182.086928489 | 2,204,088.317242778 | 2,185,138.040174282 | +18,950.277068496 | 0.8672% | OK |
+| 9 | 3,941,026.384277948 | 1,134,490.320449541 | 162,572.946215393 | 183.118320401 | 2,662,702.753243412 | 2,643,779.999292613 | +18,922.753950799 | 0.7157% | OK |
+| 10 | 3,118,106.600023772 | 718,954.77036203 | 3,919.775094447 | 184.688883101 | 2,413,820.773748008 | 2,395,047.365684194 | +18,773.408063814 | 0.7838% | OK |
+| 11 | 2,980,612.119628553 | 1,145,934.992162841 | 129,210.568190921 | 185.661334516 | 1,724,261.701431808 | 1,705,280.897940275 | +18,980.803491533 | 1.1130% | **DISCREPANCY >1%** |
+| 12 | 3,360,252.048608388 | 1,522,132.651258694 | 0 | 187.292697989 | 1,856,786.281218517 | 1,837,932.104651705 | +18,854.176566812 | 1.0258% | **DISCREPANCY >1%** |
+| 13 | 2,419,734.443340406 | 593,048.370031793 | 16,582.21426827 | 187.761479025 | 1,828,953.545731635 | 1,809,916.097561318 | +19,037.448170317 | 1.0518% | **DISCREPANCY >1%** |
+| 14 | 3,059,209.25751119 | 1,180,371.405325601 | 129,813.067943654 | 188.278374929 | 1,767,865.10047261 | 1,748,836.505867006 | +19,028.594605604 | 1.0880% | **DISCREPANCY >1%** |
+| 15 | 1,282,865.777443807 | 354,654.991781899 | 218,450.086902211 | 189.096217246 | 716,745.344324384 | 709,571.602542451 | +7,173.741781933 | 1.0109% | **DISCREPANCY >1%** |
+| 16 | 292,256.056082386 | 106,491.578931276 | 9,125.331581653 | 191.086571497 | 219,971.692133916 | 176,448.05899796 | +43,523.633135956 | 24.6665% | **DISCREPANCY >1%** |
+| 17 | 3,025,648.801008853 | 340,475.604612198 | 112,045.125874453 | 191.357595979 | 2,591,753.716854974 | 2,572,936.712926223 | +18,817.003928751 | 0.7313% | OK |
+| 18 | 3,221,525.3581729 | 327,278.331731401 | 184,937.037344576 | 428.502768757 | 2,728,012.390175507 | 2,708,881.486328166 | +19,130.903847341 | 0.7062% | OK |
+| 19 | 2,545,332.820616755 | 1,005,152.040322882 | 720.569891173 | 193.424919901 | 1,558,366.405120635 | 1,539,266.785482799 | +19,099.619637836 | 1.2408% | **DISCREPANCY >1%** |
+| 20 | 3,151,579.118117668 | 1,318,019.090795353 | 0 | 195.646865477 | 1,852,324.660431886 | 1,833,364.380456838 | +18,960.279975048 | 1.0341% | **DISCREPANCY >1%** |
+| 21 | 3,446,345.944539729 | 811,563.250445903 | 12,526.594993624 | 196.583376059 | 2,641,137.2895972 | 2,622,059.515724143 | +19,077.773873057 | 0.7275% | OK |
+| 22 | 3,424,692.078972077 | 1,181,104.166041112 | 8,538.815663423 | 197.742051099 | 2,253,922.90864158 | 2,234,851.355216443 | +19,071.553425137 | 0.8533% | OK |
+| 23 | 4,040,901.136284042 | 1,085,012.60808004 | 257,565.47245039 | 198.241550699 | 2,717,035.06015898 | 2,698,124.814202913 | +18,910.245956067 | 0.7008% | OK |
+| 24 | 3,641,694.385197894 | 581,611.381123771 | 113,298.120046902 | 199.496276103 | 2,964,647.656840732 | 2,946,585.387751118 | +18,062.269089614 | 0.6129% | OK |
+| 25 | 4,116,564.160734956 | 872,691.458855825 | 0 | 199.348350585 | 3,262,570.098652547 | 3,243,673.353528546 | +18,896.745124001 | 0.5825% | OK |
+| 26 | 776,678.346869401 | 91,065.541425466 | 16,231.463886896 | 200.885745805 | 673,306.86442606 | 669,180.455811234 | +4,126.408614826 | 0.6166% | OK |
+| 27 | 3,217,083.984189999 | 1,225,488.394288307 | 114.576078423 | 204.326060395 | 2,010,230.893396306 | 1,991,276.687762874 | +18,954.205633432 | 0.9518% | OK |
+| 28 | 4,652,637.614447017 | 1,380,136.946029568 | 146,402.018554781 | 202.21018717 | 3,144,789.333292944 | 3,125,896.439675498 | +18,892.893617446 | 0.6043% | OK |
+| 29 | 2,898,492.592659301 | 610,829.352749762 | 0 | 204.726660953 | 2,306,335.831049477 | 2,287,458.513248586 | +18,877.317800891 | 0.8252% | OK |
+| 30 | 3,382,573.048550954 | 710,234.099517005 | 22,914.692387486 | 205.461152394 | 2,667,110.572279116 | 2,649,218.795494069 | +17,891.776785047 | 0.6753% | OK |
+| 31 | 1,586,507.687500347 | 660,846.230518782 | 38,096.765184011 | 205.694922314 | 893,531.693731475 | 887,358.99687524 | +6,172.696856235 | 0.6956% | OK |
+| 32 | 3,427,216.832587246 | 17,419.272873098 | 94,980.465258985 | 207.895902574 | 3,333,422.893428039 | 3,314,609.198552589 | +18,813.69487545 | 0.5675% | OK |
+| 33 | 2,301,826.798040161 | 584,226.582883127 | 87,386.486427303 | 208.090754811 | 1,649,218.144611554 | 1,630,005.63797492 | +19,212.506636634 | 1.1786% | **DISCREPANCY >1%** |
+| 34 | 2,517,745.173495496 | 359,469.273754254 | 133,528.193164624 | 208.353990349 | 2,043,591.427143987 | 2,024,539.352586269 | +19,052.074557718 | 0.9410% | OK |
+| 35 | 2,988,526.927713479 | 266,886.343998939 | 95,598.20397956 | 211.13390881 | 2,644,675.94827133 | 2,625,831.24582617 | +18,844.70244516 | 0.7176% | OK |
+| 36 | 627,886.239072002 | 131,286.518958231 | 37,538.851627533 | 212.003480312 | 464,701.809419829 | 458,848.865005926 | +5,852.944413903 | 1.2755% | **DISCREPANCY >1%** |
+| 37 | 3,572,551.215572503 | 1,209,281.44508295 | 0 | 212.373593965 | 2,381,932.136047951 | 2,363,057.396895588 | +18,874.739152363 | 0.7987% | OK |
+| 38 | 1,473,091.798496097 | 485,297.062238848 | 104,919.757096175 | 857.101524206 | 886,266.551300017 | 882,017.877636868 | +4,248.673663149 | 0.4816% | OK |
+| 39 | 3,166,430.553195886 | 1,460,083.628868387 | 29,373.416255258 | 213.780998117 | 1,695,429.468557074 | 1,676,759.727074124 | +18,669.74148295 | 1.1134% | **DISCREPANCY >1%** |
+| 40 | 327,000.733918726 | 74,153.423804429 | 128,034.305600759 | 214.517385181 | 176,741.448835177 | 124,598.487128357 | +52,142.96170682 | 41.8487% | **DISCREPANCY >1%** |
+| 41 | 2,975,168.611654056 | 973,744.279818439 | 217,217.580368984 | 215.976763399 | 1,802,863.651482052 | 1,783,990.774703234 | +18,872.876778818 | 1.0579% | **DISCREPANCY >1%** |
+| 42 | 2,595,038.142096049 | 430,642.557214966 | 0 | 217.919954609 | 2,183,122.943907032 | 2,164,177.664926474 | +18,945.278980558 | 0.8754% | OK |
+| 43 | 3,052,782.884567396 | 857,879.953518064 | 418.387877525 | 218.016150189 | 2,212,435.691834392 | 2,194,266.527021618 | +18,169.164812774 | 0.8280% | OK |
+| 44 | 4,012,375.738213078 | 506,394.124946002 | 126,793.659555026 | 218.029336235 | 3,398,459.104068 | 3,378,969.924375815 | +19,489.179692185 | 0.5767% | OK |
+| 45 | 3,011,747.442172559 | 1,021,886.089454556 | 0 | 221.877745727 | 2,008,703.116929344 | 1,989,639.474972276 | +19,063.641957068 | 0.9581% | OK |
+| 46 | 3,510,713.597918791 | 920,454.734537479 | 93,394.806384354 | 221.017693834 | 2,515,548.15997582 | 2,496,643.039303124 | +18,905.120672696 | 0.7572% | OK |
+| 47 | 1,295,524.895427735 | 588,653.185177574 | 22,924.082606544 | 222.661885459 | 687,673.465762526 | 683,724.965758158 | +3,948.500004368 | 0.5774% | OK |
+| 48 | 3,107,530.04985937 | 695,492.461656953 | 101,664.859193657 | 223.700853057 | 2,328,846.687272452 | 2,310,149.028155703 | +18,697.659116749 | 0.8093% | OK |
+| 49 | 2,017,871.404048347 | 694,094.772062343 | 164,459.229255281 | 223.470969142 | 1,164,300.147403006 | 1,159,093.931761581 | +5,206.215641425 | 0.4491% | OK |
+| 50 | 3,236,910.049890369 | 467,621.462714429 | 40,263.969667629 | 224.870419964 | 2,747,775.456897652 | 2,728,799.747088347 | +18,975.709809305 | 0.6953% | OK |
+| 51 | 3,694,843.818234726 | 1,171,146.945421614 | 153,205.350746617 | 225.01488152 | 2,389,201.875098131 | 2,370,266.507184975 | +18,935.367913156 | 0.7988% | OK |
+| 52 | 2,952,112.070821844 | 1,077,162.060889068 | 90.395967424 | 226.761205225 | 1,893,408.234763284 | 1,874,632.852760127 | +18,775.382003157 | 1.0015% | **DISCREPANCY >1%** |
+| 53 | 4,587,454.080533128 | 520,242.333818612 | 83,438.18415983 | 227.141069501 | 4,002,412.306866003 | 3,983,546.421485185 | +18,865.885380818 | 0.4735% | OK |
+| 54 | 3,774,201.691772849 | 562,924.886719164 | 43,761.132345373 | 229.262086162 | 3,186,263.949667802 | 3,167,286.41062215 | +18,977.539045652 | 0.5991% | OK |
+| 55 | 2,799,332.289393601 | 316,092.836118957 | 94,545.881062638 | 231.134605088 | 2,407,570.599805009 | 2,388,462.437606918 | +19,108.162198091 | 0.8000% | OK |
+| 56 | 2,646,401.264136623 | 774,485.915914827 | 13,997.922202342 | 230.282503582 | 1,876,658.38095267 | 1,857,687.143515872 | +18,971.237436798 | 1.0212% | **DISCREPANCY >1%** |
+| 57 | 825,772.111178675 | 317,596.320183395 | 70,615.680938887 | 231.648963675 | 442,264.988899287 | 437,328.461092718 | +4,936.527806569 | 1.1287% | **DISCREPANCY >1%** |
+| 58 | 297,298.290570974 | 161,966.767161337 | 0 | 82.223144216 | 228,682.61780516 | 135,249.300265421 | +93,433.317539739 | 69.0822% | **DISCREPANCY >1%** |
+| 59 | 3,193,728.959417721 | 440,939.168981065 | 122,883.114116497 | 236.495433101 | 2,648,586.34800194 | 2,629,670.180887058 | +18,916.167114882 | 0.7193% | OK |
+| 60 | 3,738,933.573624944 | 628,958.607866544 | 40,528.882878666 | 235.011153453 | 3,088,309.198855045 | 3,069,211.071726281 | +19,098.127128764 | 0.6222% | OK |
+| 61 | 4,368,648.132467239 | 808,370.14496251 | 81,351.413708206 | 235.599154615 | 3,497,985.843054945 | 3,478,690.974641908 | +19,294.868413037 | 0.5546% | OK |
+| 62 | 2,639,378.727082926 | 184,174.273336392 | 43,105.712820125 | 236.315194532 | 2,431,187.062364878 | 2,411,862.425731877 | +19,324.636633001 | 0.8012% | OK |
+| 63 | 3,817,260.20141334 | 725,439.396179942 | 147,124.273144949 | 237.616747343 | 2,963,791.083203702 | 2,944,458.915341106 | +19,332.167862596 | 0.6565% | OK |
+| 64 | 3,340,769.557968182 | 267,933.276542149 | 166,755.198951647 | 238.063767946 | 2,925,100.024232174 | 2,905,843.01870644 | +19,257.005525734 | 0.6626% | OK |
+| 65 | 3,223,182.02667184 | 939,351.125453697 | 71.722624687 | 241.953625567 | 2,290,879.611105601 | 2,283,517.224967889 | +7,362.386137712 | 0.3224% | OK |
+| 66 | 3,355,562.767963545 | 876,389.726869251 | 83,262.913449555 | 241.876365668 | 2,399,574.013147158 | 2,395,668.251279071 | +3,905.761868087 | 0.1630% | OK |
+| 67 | 818,230.005618122 | 275,635.793013465 | 132,264.88633962 | 241.548133069 | 415,753.341684633 | 410,087.778131968 | +5,665.563552665 | 1.3815% | **DISCREPANCY >1%** |
+| 68 | 3,606,514.944410942 | 681,206.505097183 | 169,951.259178265 | 242.156427264 | 2,757,678.262310717 | 2,755,115.02370823 | +2,563.238602487 | 0.0930% | OK |
+| 69 | 1,127,752.983729383 | 281,678.898945926 | 59,604.102841208 | 243.154576638 | 789,692.225967185 | 786,226.827365611 | +3,465.398601574 | 0.4407% | OK |
+| 70 | 38,328.22374926 | 148.169094182 | 0 | 179.182726676 | 38,149.040995632 | 38,000.871928402 | +148.16906723 | 0.3899% | OK |
+| 71 | 4,185,117.677766843 | 876,438.347763752 | 85,705.37638208 | 246.451983443 | 3,225,073.636749908 | 3,222,727.501637568 | +2,346.13511234 | 0.0727% | OK |
+| 72 | 2,486,800.251902087 | 383,273.725113362 | 0 | 247.603932768 | 2,105,694.740466461 | 2,103,278.922855957 | +2,415.817610504 | 0.1148% | OK |
+| 73 | 3,280,377.920420528 | 1,468,954.069047113 | 0 | 248.105893972 | 1,813,676.942884909 | 1,811,175.745479443 | +2,501.197405466 | 0.1380% | OK |
+| 74 | 3,335,918.259227667 | 531,791.422968235 | 94,292.343237338 | 249.356012691 | 2,712,295.874311409 | 2,709,585.137009403 | +2,710.737302006 | 0.1000% | OK |
+| 75 | 3,508,563.937981465 | 784,604.879643725 | 16,899.278827414 | 249.228181412 | 2,709,395.891317406 | 2,706,810.551328914 | +2,585.339988492 | 0.0955% | OK |
+| 76 | 1,014,677.381470641 | 475,840.83810665 | 4,053.056546057 | 251.707430119 | 539,215.189087256 | 534,531.779387815 | +4,683.409699441 | 0.8761% | OK |
+| 77 | 3,211,836.798076511 | 140,886.89655137 | 560,753.334406754 | 251.99907563 | 2,512,507.442349621 | 2,509,944.568042757 | +2,562.874306864 | 0.1021% | OK |
+| 78 | 650,044.486811965 | 64,569.373140067 | 93,439.420139376 | 253.779702554 | 497,791.007489218 | 491,781.913829968 | +6,009.09365925 | 1.2219% | **DISCREPANCY >1%** |
+| 79 | 3,522,181.512750562 | 444,229.939659842 | 150,692.851475746 | 253.600830658 | 2,929,780.461334615 | 2,927,005.120784316 | +2,775.340550299 | 0.0948% | OK |
+| 80 | 1,805,804.602432742 | 192,549.794495279 | 42,374.70227022 | 254.090831536 | 1,575,661.087864241 | 1,570,626.014835707 | +5,035.073028534 | 0.3205% | OK |
+| 81 | 2,604,352.471416384 | 851,302.349232435 | 112,249.320611051 | 255.414012884 | 1,643,122.255968379 | 1,640,545.387560014 | +2,576.868408365 | 0.1570% | OK |
+| 82 | 637,041.829536987 | 51,351.621683119 | 203,656.438410755 | 256.745850225 | 387,646.14878236 | 381,777.023592888 | +5,869.125189472 | 1.5373% | **DISCREPANCY >1%** |
+| 83 | 2,655,165.094539082 | 345,172.824104195 | 208,332.711813588 | 257.256934018 | 2,105,495.312152469 | 2,101,402.301687281 | +4,093.010465188 | 0.1947% | OK |
+| 84 | 573,299.241545722 | 43,139.508392941 | 25,365.155475257 | 257.999999446 | 499,568.25457856 | 504,536.577678078 | -4,968.323099518 | 0.9847% | OK |
+| 85 | 2,507,842.207226497 | 496,360.999970373 | 63,690.367456503 | 260.014358241 | 1,950,373.413274667 | 1,947,530.82544138 | +2,842.587833287 | 0.1459% | OK |
 | 86 | 0 | 167,757.35619872 | 0 | 0 | 0 | 0 | 0 | 0.0000% | OK |
-| 87 | 1,507,272.581541561 | 647,402.902423667 | 51,054.043826615 | 267.166257822 | 811,937.38714958 | 808,548.469033457 | +3,388.918116123 | 0.4191% | OK |
-| 88 | 3,458,038.307639901 | 175,269.312981134 | 95,635.038158501 | 267.870198711 | 3,189,628.068539638 | 3,186,866.086301555 | +2,761.982238083 | 0.0866% | OK |
-| 89 | 2,763,942.852090179 | 600,426.954984618 | 187,748.849811315 | 269.328223075 | 1,978,297.520002656 | 1,975,497.719071171 | +2,799.800931485 | 0.1417% | OK |
-| 90 | 140,129.393099798 | 116,392.269522858 | 0 | 106.03218843 | 140,001.653399788 | 23,631.09138851 | +116,370.562011278 | 492.4468% | **DISCREPANCY >1%** |
-| 91 | 993,464.722100035 | 399,376.775480423 | 55,172.985619804 | 270.197144643 | 543,685.801296443 | 538,644.763855165 | +5,041.037441278 | 0.9358% | OK |
-| 92 | 382,892.228663509 | 176,927.850467173 | 41,186.988026446 | 272.17815149 | 165,518.197370141 | 164,505.2120184 | +1,012.985351741 | 0.6157% | OK |
-| 93 | 3,180,218.141300769 | 1,085,835.159306595 | 10,630.737656249 | 272.306172505 | 2,086,451.787267245 | 2,083,479.93816542 | +2,971.849101825 | 0.1426% | OK |
-| 94 | 1,582,844.5781042 | 680,196.760099128 | 6,977.120150346 | 274.371739528 | 901,263.328629545 | 895,396.326115198 | +5,867.002514347 | 0.6552% | OK |
-| 95 | 2,823,510.04876599 | 975,818.72867639 | 92,584.118277643 | 274.028885628 | 1,759,219.58729414 | 1,754,833.172926329 | +4,386.414367811 | 0.2499% | OK |
-| 96 | 672,940.803045531 | 223,924.687813565 | 67,499.464576751 | 275.313063509 | 387,490.176423779 | 381,241.337591706 | +6,248.838832073 | 1.6390% | **DISCREPANCY >1%** |
-| 97 | 941,711.091209591 | 70,872.776437572 | 251,260.624029315 | 276.065141906 | 624,754.286624672 | 619,301.625600798 | +5,452.661023874 | 0.8804% | OK |
-| 98 | 2,790,280.348044368 | 1,255,490.393926426 | 0 | 278.435730652 | 1,537,507.711157861 | 1,534,511.51838729 | +2,996.192770571 | 0.1952% | OK |
-| 99 | 217,546.329419552 | 72,004.601807409 | 0 | 289.650694712 | 145,941.59538324 | 145,252.076917431 | +689.518465809 | 0.4747% | OK |
-| 100 | 1,799,806.095590657 | 659,972.413440104 | 8,577.774654887 | 279.477567728 | 1,136,482.892106863 | 1,130,976.429927938 | +5,506.462178925 | 0.4868% | OK |
-| 101 | 2,301,521.793430326 | 806,501.042836516 | 147,162.212142243 | 280.978266723 | 1,352,453.090541984 | 1,347,577.560184844 | +4,875.53035714 | 0.3617% | OK |
-| 102 | 843,156.314854854 | 118,084.708059441 | 158,995.005398752 | 281.295649389 | 571,127.582889633 | 565,795.305747272 | +5,332.277142361 | 0.9424% | OK |
-| 103 | 96,682.397144062 | 99,945.222911754 | 0 | 52.418540249 | 75,426.029679651 | 0 | +75,426.029679651 | ∞% | **DISCREPANCY >1%** |
-| 104 | 3,062,980.342942101 | 340,321.172598343 | 8,693.224149186 | 283.763791082 | 2,725,130.208756965 | 2,713,682.18240349 | +11,448.026353475 | 0.4218% | OK |
-| 105 | 1,922,191.5856493 | 451,644.439901403 | 196,110.745014715 | 284.242109133 | 1,278,846.154813373 | 1,274,152.158624049 | +4,693.996189324 | 0.3684% | OK |
-| 106 | 2,376,998.760564706 | 838,637.534343767 | 53,273.846844962 | 286.301424867 | 1,487,849.779485208 | 1,484,801.07795111 | +3,048.701534098 | 0.2053% | OK |
-| 107 | 1,412,325.822769323 | 389,715.783508211 | 259,171.45779307 | 286.014369458 | 768,379.69328733 | 763,152.567098584 | +5,227.126188746 | 0.6849% | OK |
-| 108 | 1,530,532.515126298 | 442,784.567664372 | 38,862.313667517 | 288.752965225 | 1,054,527.794798477 | 1,048,596.880829184 | +5,930.913969293 | 0.5656% | OK |
-| 109 | 1,408,937.281801709 | 626,919.832814457 | 70,026.821602108 | 289.413033362 | 715,168.920824128 | 711,701.214351782 | +3,467.706472346 | 0.4872% | OK |
-| 110 | 2,492,981.995535483 | 653,602.202903777 | 114,616.427162985 | 289.551432235 | 1,729,173.602489589 | 1,724,473.814036486 | +4,699.788453103 | 0.2725% | OK |
-| 111 | 3,442,711.711521751 | 686,963.807461569 | 337,717.260844435 | 290.90383668 | 2,421,207.348894766 | 2,417,739.739379067 | +3,467.609515699 | 0.1434% | OK |
-| 112 | 1,865,779.736981223 | 925,696.620748774 | 85,660.90276259 | 292.726524809 | 858,535.424827937 | 854,129.48694505 | +4,405.937882887 | 0.5158% | OK |
-| 113 | 1,426,491.253958655 | 682,486.06189204 | 24,443.416711791 | 293.823730967 | 723,051.673206953 | 719,267.951623857 | +3,783.721583096 | 0.5260% | OK |
-| 114 | 1,394,606.838901215 | 373,811.447473431 | 206,410.2597948 | 293.314211185 | 818,971.595299437 | 814,091.817421799 | +4,879.777877638 | 0.5994% | OK |
-| 115 | 1,527,508.977031515 | 857,494.572895518 | 0 | 295.241311526 | 674,736.540831756 | 669,719.162824471 | +5,017.378007285 | 0.7491% | OK |
-| 116 | 498,339.033277975 | 129,797.29432009 | 46,438.331747847 | 295.098963519 | 322,456.895400295 | 321,808.308246519 | +648.587153776 | 0.2015% | OK |
-| 117 | 1,577,403.159372488 | 289,424.602021989 | 110,042.604483153 | 297.659242859 | 1,182,843.699577966 | 1,177,638.293624487 | +5,205.405953479 | 0.4420% | OK |
-| 118 | 2,024,065.920306349 | 317,975.810452995 | 100,459.246518578 | 297.2598447 | 1,610,600.660779731 | 1,605,333.603490076 | +5,267.057289655 | 0.3280% | OK |
-| 119 | 1,493,352.518002894 | 776,537.885713869 | 0 | 299.161251223 | 720,015.01421028 | 716,515.471037802 | +3,499.543172478 | 0.4884% | OK |
-| 120 | 2,546,756.935340767 | 174,299.388959302 | 172,139.303505874 | 299.028676976 | 2,203,582.648794662 | 2,200,019.214198615 | +3,563.434596047 | 0.1619% | OK |
-| 121 | 2,766,663.954076083 | 1,234,341.176086707 | 0 | 300.99093554 | 1,535,311.697079252 | 1,532,021.787053836 | +3,289.910025416 | 0.2147% | OK |
-| 122 | 494,848.449887162 | 246,465.034375573 | 41,001.922983965 | 302.07158541 | 212,399.087082206 | 207,079.420942214 | +5,319.666139992 | 2.5689% | **DISCREPANCY >1%** |
-| 123 | 1,850,371.345164228 | 266,836.118126159 | 40,622.003819962 | 303.954694214 | 1,545,775.094847816 | 1,542,609.268523893 | +3,165.826323923 | 0.2052% | OK |
-| 124 | 3,304,806.199324051 | 897,004.632666029 | 196,711.907759427 | 303.202246405 | 2,213,958.401766367 | 2,210,786.45665219 | +3,171.945114177 | 0.1434% | OK |
-| 125 | 2,325,838.430010415 | 1,211,161.002135291 | 7,964.547109056 | 305.897169535 | 1,109,743.523235324 | 1,106,406.983596533 | +3,336.539638791 | 0.3015% | OK |
-| 126 | 1,107,652.577479887 | 389,824.564372371 | 215,477.375953641 | 305.623123294 | 506,364.309783089 | 502,045.014030581 | +4,319.295752508 | 0.8603% | OK |
-| 127 | 2,802,836.648141101 | 1,152,511.702574029 | 45.025794905 | 307.321344064 | 1,653,334.165428989 | 1,649,972.598428103 | +3,361.567000886 | 0.2037% | OK |
-| 128 | 2,676,802.343533691 | 186,014.794503201 | 34,715.84016103 | 308.261683792 | 2,459,320.890947386 | 2,455,763.447185668 | +3,557.443761718 | 0.1448% | OK |
+| 87 | 1,507,267.581541561 | 647,402.902423667 | 51,054.043826615 | 262.166257832 | 811,937.38714958 | 808,548.469033447 | +3,388.918116133 | 0.4191% | OK |
+| 88 | 3,458,033.241549274 | 175,269.312981134 | 95,634.972067874 | 262.870198722 | 3,189,628.068539638 | 3,186,866.086301544 | +2,761.982238094 | 0.0866% | OK |
+| 89 | 2,763,937.852090179 | 600,426.954984618 | 187,748.849811315 | 264.328223086 | 1,978,297.520002656 | 1,975,497.71907116 | +2,799.800931496 | 0.1417% | OK |
+| 90 | 140,124.393099798 | 116,392.269522858 | 0 | 101.032188441 | 140,001.653399788 | 23,631.091388499 | +116,370.562011289 | 492.4468% | **DISCREPANCY >1%** |
+| 91 | 993,459.495024107 | 399,376.775480423 | 55,172.758543876 | 265.197144653 | 543,685.801296443 | 538,644.763855155 | +5,041.037441288 | 0.9358% | OK |
+| 92 | 382,887.228663509 | 176,927.850467173 | 41,186.988026446 | 267.1781515 | 165,518.197370141 | 164,505.21201839 | +1,012.985351751 | 0.6157% | OK |
+| 93 | 3,180,211.58638749 | 1,085,835.159306595 | 10,629.18274297 | 267.306172515 | 2,086,451.787267245 | 2,083,479.93816541 | +2,971.849101835 | 0.1426% | OK |
+| 94 | 1,582,839.5781042 | 680,196.760099128 | 6,977.120150346 | 269.371739539 | 901,263.328629545 | 895,396.326115187 | +5,867.002514358 | 0.6552% | OK |
+| 95 | 2,823,505.04876599 | 975,818.72867639 | 92,584.118277643 | 269.028885638 | 1,759,219.58729414 | 1,754,833.172926319 | +4,386.414367821 | 0.2499% | OK |
+| 96 | 672,935.803045531 | 223,924.687813565 | 67,499.464576751 | 270.313063519 | 387,490.176423779 | 381,241.337591696 | +6,248.838832083 | 1.6390% | **DISCREPANCY >1%** |
+| 97 | 941,704.675781773 | 70,872.776437572 | 251,259.208601497 | 271.065141917 | 624,754.286624672 | 619,301.625600787 | +5,452.661023885 | 0.8804% | OK |
+| 98 | 2,790,275.348044368 | 1,255,490.393926426 | 0 | 273.435730664 | 1,537,507.711157861 | 1,534,511.518387278 | +2,996.192770583 | 0.1952% | OK |
+| 99 | 217,541.329419552 | 72,004.601807409 | 0 | 284.650694722 | 145,941.59538324 | 145,252.076917421 | +689.518465819 | 0.4747% | OK |
+| 100 | 1,799,801.095590657 | 659,972.413440104 | 8,577.774654887 | 274.477567738 | 1,136,482.892106863 | 1,130,976.429927928 | +5,506.462178935 | 0.4868% | OK |
+| 101 | 2,301,516.793430326 | 806,501.042836516 | 147,162.212142243 | 275.978266734 | 1,352,453.090541984 | 1,347,577.560184833 | +4,875.530357151 | 0.3617% | OK |
+| 102 | 843,151.314854854 | 118,084.708059441 | 158,995.005398752 | 276.2956494 | 571,127.582889633 | 565,795.305747261 | +5,332.277142372 | 0.9424% | OK |
+| 103 | 96,677.397144062 | 99,945.222911754 | 0 | 56.941119041 | 75,416.50710087 | 0 | +75,416.50710087 | ∞% | **DISCREPANCY >1%** |
+| 104 | 3,062,975.342942101 | 340,321.172598343 | 8,693.224149186 | 278.763791093 | 2,725,130.208756965 | 2,713,682.182403479 | +11,448.026353486 | 0.4218% | OK |
+| 105 | 1,922,186.189727597 | 451,644.439901403 | 196,110.349093012 | 279.242109144 | 1,278,846.154813373 | 1,274,152.158624038 | +4,693.996189335 | 0.3684% | OK |
+| 106 | 2,376,993.760564706 | 838,637.534343767 | 53,273.846844962 | 281.301424877 | 1,487,849.779485208 | 1,484,801.0779511 | +3,048.701534108 | 0.2053% | OK |
+| 107 | 1,412,318.981965671 | 389,715.783508211 | 259,169.616989418 | 281.014369468 | 768,379.69328733 | 763,152.567098574 | +5,227.126188756 | 0.6849% | OK |
+| 108 | 1,530,527.515126298 | 442,784.567664372 | 38,862.313667517 | 283.752965235 | 1,054,527.794798477 | 1,048,596.880829174 | +5,930.913969303 | 0.5656% | OK |
+| 109 | 1,408,932.281801709 | 626,919.832814457 | 70,026.821602108 | 284.413033372 | 715,168.920824128 | 711,701.214351772 | +3,467.706472356 | 0.4872% | OK |
+| 110 | 2,492,976.557785085 | 653,602.202903777 | 114,615.989412587 | 284.551432245 | 1,729,173.602489589 | 1,724,473.814036476 | +4,699.788453113 | 0.2725% | OK |
+| 111 | 3,442,706.711521751 | 686,963.807461569 | 337,717.260844435 | 285.903836691 | 2,421,207.348894766 | 2,417,739.739379056 | +3,467.60951571 | 0.1434% | OK |
+| 112 | 1,865,774.736981223 | 925,696.620748774 | 85,660.90276259 | 287.726524819 | 858,535.424827937 | 854,129.48694504 | +4,405.937882897 | 0.5158% | OK |
+| 113 | 1,426,486.253958655 | 682,486.06189204 | 24,443.416711791 | 288.823730977 | 723,051.673206953 | 719,267.951623847 | +3,783.721583106 | 0.5260% | OK |
+| 114 | 1,394,600.747435016 | 373,811.447473431 | 206,409.168328601 | 288.314211197 | 818,971.595299437 | 814,091.817421787 | +4,879.77787765 | 0.5994% | OK |
+| 115 | 1,527,503.977031515 | 857,494.572895518 | 0 | 290.241311536 | 674,736.540831756 | 669,719.162824461 | +5,017.378007295 | 0.7491% | OK |
+| 116 | 498,334.033277975 | 129,797.29432009 | 46,438.331747847 | 290.098963529 | 322,456.895400295 | 321,808.308246509 | +648.587153786 | 0.2015% | OK |
+| 117 | 1,577,398.159372488 | 289,424.602021989 | 110,042.604483153 | 292.65924287 | 1,182,843.699577966 | 1,177,638.293624476 | +5,205.40595349 | 0.4420% | OK |
+| 118 | 2,024,060.920306349 | 317,975.810452995 | 100,459.246518578 | 292.25984471 | 1,610,600.660779731 | 1,605,333.603490066 | +5,267.057289665 | 0.3280% | OK |
+| 119 | 1,493,347.518002894 | 776,537.885713869 | 0 | 294.161251233 | 720,015.01421028 | 716,515.471037792 | +3,499.543172488 | 0.4884% | OK |
+| 120 | 2,546,749.347521547 | 174,299.388959302 | 172,136.715686654 | 294.028676987 | 2,203,582.648794662 | 2,200,019.214198604 | +3,563.434596058 | 0.1619% | OK |
+| 121 | 2,766,658.954076083 | 1,234,341.176086707 | 0 | 295.990935552 | 1,535,311.697079252 | 1,532,021.787053824 | +3,289.910025428 | 0.2147% | OK |
+| 122 | 494,843.449887162 | 246,465.034375573 | 41,001.922983965 | 297.07158542 | 212,399.087082206 | 207,079.420942204 | +5,319.666140002 | 2.5689% | **DISCREPANCY >1%** |
+| 123 | 1,850,366.345164228 | 266,836.118126159 | 40,622.003819962 | 298.954694224 | 1,545,775.094847816 | 1,542,609.268523883 | +3,165.826323933 | 0.2052% | OK |
+| 124 | 3,304,799.541641152 | 897,004.632666029 | 196,710.250076528 | 298.202246416 | 2,213,958.401766367 | 2,210,786.456652179 | +3,171.945114188 | 0.1434% | OK |
+| 125 | 2,325,833.430010415 | 1,211,161.002135291 | 7,964.547109056 | 300.897169546 | 1,109,743.523235324 | 1,106,406.983596522 | +3,336.539638802 | 0.3015% | OK |
+| 126 | 1,107,647.577479887 | 389,824.564372371 | 215,477.375953641 | 300.623123305 | 506,364.309783089 | 502,045.01403057 | +4,319.295752519 | 0.8603% | OK |
+| 127 | 2,802,831.648141101 | 1,152,511.702574029 | 45.025794905 | 302.321344076 | 1,653,334.165428989 | 1,649,972.598428091 | +3,361.567000898 | 0.2037% | OK |
+| 128 | 2,676,797.343533691 | 186,014.794503201 | 34,715.84016103 | 303.261683803 | 2,459,320.890947386 | 2,455,763.447185657 | +3,557.443761729 | 0.1448% | OK |
 
 ## Discrepancies greater than 1%
 
@@ -700,32 +711,32 @@ Unlock rate: `934866`; maturity rate: `311622`
 | before | 126 | 1,107,640.577479887 | 101,570.16062343 | 215,477.375953641 | 293.62312332 | 506,364.309783089 | 790,299.417779496 | -283,935.107996407 | 35.9275% | **DISCREPANCY >1%** |
 | before | 127 | 2,802,824.648141101 | 201,728.715858691 | 45.025794905 | 295.32134409 | 1,653,334.165428989 | 2,600,755.585143415 | -947,421.419714426 | 36.4286% | **DISCREPANCY >1%** |
 | before | 128 | 2,676,790.343533691 | 0 | 34,715.84016103 | 296.261683818 | 2,459,320.890947386 | 2,641,778.241688843 | -182,457.350741457 | 6.9066% | **DISCREPANCY >1%** |
-| after | 1 | 2,484,439.267183304 | 826,743.498270167 | 17,184.489564018 | 17.560874689 | 1,659,802.387982222 | 1,640,493.71847443 | +19,308.669507792 | 1.1770% | **DISCREPANCY >1%** |
-| after | 5 | 2,998,782.621176459 | 1,488,257.228963462 | 3,606.721507634 | 184.281869893 | 1,525,624.786765432 | 1,506,734.38883547 | +18,890.397929962 | 1.2537% | **DISCREPANCY >1%** |
-| after | 11 | 2,980,618.093933277 | 1,145,934.992162841 | 129,211.542495645 | 190.661334505 | 1,724,261.701431808 | 1,705,280.897940286 | +18,980.803491522 | 1.1130% | **DISCREPANCY >1%** |
-| after | 12 | 3,360,257.048608388 | 1,522,132.651258694 | 0 | 192.292697978 | 1,856,786.281218517 | 1,837,932.104651716 | +18,854.176566801 | 1.0258% | **DISCREPANCY >1%** |
-| after | 13 | 2,419,739.443340406 | 593,048.370031793 | 16,582.21426827 | 192.761479014 | 1,828,953.545731635 | 1,809,916.097561329 | +19,037.448170306 | 1.0518% | **DISCREPANCY >1%** |
-| after | 14 | 3,059,214.25751119 | 1,180,371.405325601 | 129,813.067943654 | 193.278374918 | 1,767,865.10047261 | 1,748,836.505867017 | +19,028.594605593 | 1.0880% | **DISCREPANCY >1%** |
-| after | 15 | 1,282,872.56679433 | 354,654.991781899 | 218,451.876252734 | 194.096217236 | 716,745.344324384 | 709,571.602542461 | +7,173.741781923 | 1.0109% | **DISCREPANCY >1%** |
-| after | 16 | 292,261.056082386 | 106,491.578931276 | 9,125.331581653 | 196.086571486 | 219,971.692133916 | 176,448.058997971 | +43,523.633135945 | 24.6665% | **DISCREPANCY >1%** |
-| after | 19 | 2,545,337.931587017 | 1,005,152.040322882 | 720.680861435 | 198.424919891 | 1,558,366.405120635 | 1,539,266.785482809 | +19,099.619637826 | 1.2408% | **DISCREPANCY >1%** |
-| after | 20 | 3,151,584.118117668 | 1,318,019.090795353 | 0 | 200.646865467 | 1,852,324.660431886 | 1,833,364.380456848 | +18,960.279975038 | 1.0341% | **DISCREPANCY >1%** |
-| after | 33 | 2,301,832.10795105 | 584,226.582883127 | 87,386.796338192 | 213.090754801 | 1,649,218.144611554 | 1,630,005.63797493 | +19,212.506636624 | 1.1786% | **DISCREPANCY >1%** |
-| after | 36 | 627,891.239072002 | 131,286.518958231 | 37,538.851627533 | 217.003480302 | 464,701.809419829 | 458,848.865005936 | +5,852.944413893 | 1.2755% | **DISCREPANCY >1%** |
-| after | 39 | 3,166,435.553195886 | 1,460,083.628868387 | 29,373.416255258 | 218.780998106 | 1,695,429.468557074 | 1,676,759.727074135 | +18,669.741482939 | 1.1134% | **DISCREPANCY >1%** |
-| after | 40 | 327,005.733918726 | 74,153.423804429 | 128,034.305600759 | 219.517385171 | 176,741.448835177 | 124,598.487128367 | +52,142.96170681 | 41.8487% | **DISCREPANCY >1%** |
-| after | 41 | 2,975,173.611654056 | 973,744.279818439 | 217,217.580368984 | 220.976763389 | 1,802,863.651482052 | 1,783,990.774703244 | +18,872.876778808 | 1.0579% | **DISCREPANCY >1%** |
-| after | 52 | 2,952,117.070821844 | 1,077,162.060889068 | 90.395967424 | 231.761205215 | 1,893,408.234763284 | 1,874,632.852760137 | +18,775.382003147 | 1.0015% | **DISCREPANCY >1%** |
-| after | 56 | 2,646,406.264136623 | 774,485.915914827 | 13,997.922202342 | 235.282503571 | 1,876,658.38095267 | 1,857,687.143515883 | +18,971.237436787 | 1.0212% | **DISCREPANCY >1%** |
-| after | 57 | 825,777.111178675 | 317,596.320183395 | 70,615.680938887 | 236.648963665 | 442,264.988899287 | 437,328.461092728 | +4,936.527806559 | 1.1287% | **DISCREPANCY >1%** |
-| after | 58 | 297,303.290570974 | 161,966.767161337 | 0 | 87.223144206 | 228,682.61780516 | 135,249.300265431 | +93,433.317539729 | 69.0822% | **DISCREPANCY >1%** |
-| after | 67 | 818,235.005618122 | 275,635.793013465 | 132,264.88633962 | 246.548133058 | 415,753.341684633 | 410,087.778131979 | +5,665.563552654 | 1.3815% | **DISCREPANCY >1%** |
-| after | 78 | 650,049.486811965 | 64,569.373140067 | 93,439.420139376 | 258.779702543 | 497,791.007489218 | 491,781.913829979 | +6,009.093659239 | 1.2219% | **DISCREPANCY >1%** |
-| after | 82 | 637,046.829536987 | 51,351.621683119 | 203,656.438410755 | 261.745850215 | 387,646.14878236 | 381,777.023592898 | +5,869.125189462 | 1.5373% | **DISCREPANCY >1%** |
-| after | 90 | 140,129.393099798 | 116,392.269522858 | 0 | 106.03218843 | 140,001.653399788 | 23,631.09138851 | +116,370.562011278 | 492.4468% | **DISCREPANCY >1%** |
-| after | 96 | 672,940.803045531 | 223,924.687813565 | 67,499.464576751 | 275.313063509 | 387,490.176423779 | 381,241.337591706 | +6,248.838832073 | 1.6390% | **DISCREPANCY >1%** |
-| after | 103 | 96,682.397144062 | 99,945.222911754 | 0 | 52.418540249 | 75,426.029679651 | 0 | +75,426.029679651 | ∞% | **DISCREPANCY >1%** |
-| after | 122 | 494,848.449887162 | 246,465.034375573 | 41,001.922983965 | 302.07158541 | 212,399.087082206 | 207,079.420942214 | +5,319.666139992 | 2.5689% | **DISCREPANCY >1%** |
+| after | 1 | 2,484,434.267183304 | 826,743.498270167 | 17,184.489564018 | 13.037807436 | 1,659,801.911049485 | 1,640,493.241541683 | +19,308.669507802 | 1.1770% | **DISCREPANCY >1%** |
+| after | 5 | 2,998,777.258856604 | 1,488,257.228963462 | 3,606.359187779 | 179.281869903 | 1,525,624.786765432 | 1,506,734.38883546 | +18,890.397929972 | 1.2537% | **DISCREPANCY >1%** |
+| after | 11 | 2,980,612.119628553 | 1,145,934.992162841 | 129,210.568190921 | 185.661334516 | 1,724,261.701431808 | 1,705,280.897940275 | +18,980.803491533 | 1.1130% | **DISCREPANCY >1%** |
+| after | 12 | 3,360,252.048608388 | 1,522,132.651258694 | 0 | 187.292697989 | 1,856,786.281218517 | 1,837,932.104651705 | +18,854.176566812 | 1.0258% | **DISCREPANCY >1%** |
+| after | 13 | 2,419,734.443340406 | 593,048.370031793 | 16,582.21426827 | 187.761479025 | 1,828,953.545731635 | 1,809,916.097561318 | +19,037.448170317 | 1.0518% | **DISCREPANCY >1%** |
+| after | 14 | 3,059,209.25751119 | 1,180,371.405325601 | 129,813.067943654 | 188.278374929 | 1,767,865.10047261 | 1,748,836.505867006 | +19,028.594605604 | 1.0880% | **DISCREPANCY >1%** |
+| after | 15 | 1,282,865.777443807 | 354,654.991781899 | 218,450.086902211 | 189.096217246 | 716,745.344324384 | 709,571.602542451 | +7,173.741781933 | 1.0109% | **DISCREPANCY >1%** |
+| after | 16 | 292,256.056082386 | 106,491.578931276 | 9,125.331581653 | 191.086571497 | 219,971.692133916 | 176,448.05899796 | +43,523.633135956 | 24.6665% | **DISCREPANCY >1%** |
+| after | 19 | 2,545,332.820616755 | 1,005,152.040322882 | 720.569891173 | 193.424919901 | 1,558,366.405120635 | 1,539,266.785482799 | +19,099.619637836 | 1.2408% | **DISCREPANCY >1%** |
+| after | 20 | 3,151,579.118117668 | 1,318,019.090795353 | 0 | 195.646865477 | 1,852,324.660431886 | 1,833,364.380456838 | +18,960.279975048 | 1.0341% | **DISCREPANCY >1%** |
+| after | 33 | 2,301,826.798040161 | 584,226.582883127 | 87,386.486427303 | 208.090754811 | 1,649,218.144611554 | 1,630,005.63797492 | +19,212.506636634 | 1.1786% | **DISCREPANCY >1%** |
+| after | 36 | 627,886.239072002 | 131,286.518958231 | 37,538.851627533 | 212.003480312 | 464,701.809419829 | 458,848.865005926 | +5,852.944413903 | 1.2755% | **DISCREPANCY >1%** |
+| after | 39 | 3,166,430.553195886 | 1,460,083.628868387 | 29,373.416255258 | 213.780998117 | 1,695,429.468557074 | 1,676,759.727074124 | +18,669.74148295 | 1.1134% | **DISCREPANCY >1%** |
+| after | 40 | 327,000.733918726 | 74,153.423804429 | 128,034.305600759 | 214.517385181 | 176,741.448835177 | 124,598.487128357 | +52,142.96170682 | 41.8487% | **DISCREPANCY >1%** |
+| after | 41 | 2,975,168.611654056 | 973,744.279818439 | 217,217.580368984 | 215.976763399 | 1,802,863.651482052 | 1,783,990.774703234 | +18,872.876778818 | 1.0579% | **DISCREPANCY >1%** |
+| after | 52 | 2,952,112.070821844 | 1,077,162.060889068 | 90.395967424 | 226.761205225 | 1,893,408.234763284 | 1,874,632.852760127 | +18,775.382003157 | 1.0015% | **DISCREPANCY >1%** |
+| after | 56 | 2,646,401.264136623 | 774,485.915914827 | 13,997.922202342 | 230.282503582 | 1,876,658.38095267 | 1,857,687.143515872 | +18,971.237436798 | 1.0212% | **DISCREPANCY >1%** |
+| after | 57 | 825,772.111178675 | 317,596.320183395 | 70,615.680938887 | 231.648963675 | 442,264.988899287 | 437,328.461092718 | +4,936.527806569 | 1.1287% | **DISCREPANCY >1%** |
+| after | 58 | 297,298.290570974 | 161,966.767161337 | 0 | 82.223144216 | 228,682.61780516 | 135,249.300265421 | +93,433.317539739 | 69.0822% | **DISCREPANCY >1%** |
+| after | 67 | 818,230.005618122 | 275,635.793013465 | 132,264.88633962 | 241.548133069 | 415,753.341684633 | 410,087.778131968 | +5,665.563552665 | 1.3815% | **DISCREPANCY >1%** |
+| after | 78 | 650,044.486811965 | 64,569.373140067 | 93,439.420139376 | 253.779702554 | 497,791.007489218 | 491,781.913829968 | +6,009.09365925 | 1.2219% | **DISCREPANCY >1%** |
+| after | 82 | 637,041.829536987 | 51,351.621683119 | 203,656.438410755 | 256.745850225 | 387,646.14878236 | 381,777.023592888 | +5,869.125189472 | 1.5373% | **DISCREPANCY >1%** |
+| after | 90 | 140,124.393099798 | 116,392.269522858 | 0 | 101.032188441 | 140,001.653399788 | 23,631.091388499 | +116,370.562011289 | 492.4468% | **DISCREPANCY >1%** |
+| after | 96 | 672,935.803045531 | 223,924.687813565 | 67,499.464576751 | 270.313063519 | 387,490.176423779 | 381,241.337591696 | +6,248.838832083 | 1.6390% | **DISCREPANCY >1%** |
+| after | 103 | 96,677.397144062 | 99,945.222911754 | 0 | 56.941119041 | 75,416.50710087 | 0 | +75,416.50710087 | ∞% | **DISCREPANCY >1%** |
+| after | 122 | 494,843.449887162 | 246,465.034375573 | 41,001.922983965 | 297.07158542 | 212,399.087082206 | 207,079.420942204 | +5,319.666140002 | 2.5689% | **DISCREPANCY >1%** |
 
 ## Accounting definitions
 
