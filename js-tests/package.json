@@ -11,6 +11,8 @@
     "test:balancer-testnet-liquidity-slippage": "node tests/test-balancer-testnet-liquidity-slippage.js",
     "test:balancer-edge-emission-issuance": "node tests/test-balancer-edge-emission-issuance.js",
     "test:balancer-reservoir-deregistration": "node tests/test-balancer-reservoir-deregistration.js",
+    "test:balancer-zero-alpha-drain-localnet": "node tests/test-balancer-zero-alpha-drain-localnet.js",
+    "test:add-stake-limit-unused-refund-localnet": "node tests/test-add-stake-limit-unused-refund-localnet.js",
     "test:total-issuance-trackers": "node tests/test-total-issuance-trackers.js",
     "test:net-tao-flow-emission-allocation": "node tests/test-net-tao-flow-emission-allocation.js",
     "test:locks-conviction": "node tests/test-locks-conviction.js",
@@ -30,7 +32,11 @@
     "test:testnet-unlock-rate": "node tests/testnet-unlock-rate-read.js",
     "test:testnet-maturity-rate": "node tests/testnet-maturity-rate-read.js",
     "test:hotkey-swap-and-proxy-stake": "node tests/test-hotkey-swap-and-proxy-stake.js",
-    "test:proxy-filter-security-regressions": "node tests/test-proxy-filter-security-regressions.js"
+    "test:coldkey-swap-locked-alpha": "node tests/test-coldkey-swap-locked-alpha.js",
+    "test:proxy-filter-security-regressions": "node tests/test-proxy-filter-security-regressions.js",
+    "test:staking-load-block-production": "node tests/test-staking-load-block-production.js",
+    "test:mainnet-block-time-epoch-correlation": "node tests/mainnet-block-time-epoch-correlation.js",
+    "test:mainnet-staking-block-time-correlation": "node tests/mainnet-staking-block-time-correlation.js"
   },
   "dependencies": {
     "@polkadot/api": "^16.4.9",
