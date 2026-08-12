@@ -14,6 +14,7 @@ const FORECAST_YEARS = 10;
 const FORECAST_BLOCKS = ONE_YEAR_BLOCKS * FORECAST_YEARS;
 const MIGRATION_NAME = "migrate_backfill_historical_alpha_burned";
 const MAINNET_GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03";
+const NETUID_ONE_HISTORICAL_BURN = 661_707_044_125_477n;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMP_DIR = path.resolve(__dirname, "..", "temp");
 const BEFORE_JSON = path.join(TEMP_DIR, "subnet-ownership-alpha-before.json");
@@ -180,7 +181,8 @@ async function captureSnapshot(phase) {
     const actual = actualStake.get(netuid) ?? 0n;
     const difference = actual - calculatedStake;
     const discrepancyPct = percentDifference(actual, calculatedStake);
-    const discrepancyOverOnePercent = discrepancyPct !== null && discrepancyPct > 1;
+    const discrepancyOverOnePercent =
+      calculatedStake === 0n ? actual !== 0n : discrepancyPct > 1;
     if (discrepancyOverOnePercent) alphaDiscrepancies.push(netuid);
 
     const locks = aggregateLocks
@@ -593,8 +595,10 @@ function migrationFinding(before, after) {
   const afterOne = after.subnets.find((row) => row.netuid === 1);
   return `> **Critical migration finding:** the clone genesis is \`${after.genesisHash}\`, not the ` +
     `hard-coded mainnet genesis \`${MAINNET_GENESIS}\`. The historical-alpha migration marked itself complete ` +
-    `but skipped its corrections. For example, subnet 1 \`AlphaBurned\` remained ` +
-    `\`${formatAlpha(beforeOne.burnedAlpha)} α → ${formatAlpha(afterOne.burnedAlpha)} α\`, and ` +
+    `but skipped its corrections. Subnet 1 should have received a historical ` +
+    `\`+${formatAlpha(NETUID_ONE_HISTORICAL_BURN)} α\` backfill; instead its observed ` +
+    `\`AlphaBurned\` values were \`${formatAlpha(beforeOne.burnedAlpha)} α → ` +
+    `${formatAlpha(afterOne.burnedAlpha)} α\` (other upgrade rebases can change the counter), and ` +
     `\`${after.alphaDiscrepancies.length}\` subnets still exceed 1% discrepancy after the upgrade.\n\n`;
 }
 
