@@ -20,10 +20,29 @@ const MIGRATION_NAMES = [
 const MAINNET_GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03";
 const NETUID_ONE_ALPHA_OUT_CORRECTION = 16_841_481_627_450n;
 const NETUID_ONE_HISTORICAL_BURN = 661_707_044_125_477n;
-const RECYCLED_BURN_OFFSETS = new Map([
-  [16, 42_912_779_090_897n],
-  [40, 51_803_789_083_976n],
-  [58, 93_219_350_226_399n],
+const RECYCLED_COUNTER_OFFSETS = new Map([
+  [116, { issuance: 10_946_000_000_000n, burned: 0n, recycled: 0n }],
+  [92, { issuance: 68_575_136_222_730n, burned: 0n, recycled: 0n }],
+  [40, { issuance: 126_076_000_000_000n, burned: 51_803_789_083_976n, recycled: 0n }],
+  [16, { issuance: 176_862_000_000_000n, burned: 42_912_779_090_897n, recycled: 0n }],
+  [58, { issuance: 227_233_000_000_000n, burned: 93_219_350_226_399n, recycled: 0n }],
+  [99, {
+    issuance: 317_241_269_686_137n,
+    burned: 591_633_301_496n,
+    recycled: 1_518_370_122_169n,
+  }],
+  [90, {
+    issuance: 345_144_192_991_428n,
+    burned: 116_392_269_522_858n,
+    recycled: 80_950_014_273n,
+  }],
+  [86, { issuance: 415_723_558_271_648n, burned: 167_757_356_198_720n, recycled: 0n }],
+  [103, { issuance: 529_768_402_624_963n, burned: 78_741_954_591_065n, recycled: 0n }],
+  [70, {
+    issuance: 589_757_917_904_445n,
+    burned: 148_169_094_182n,
+    recycled: 3_904_269_338_445n,
+  }],
 ]);
 const TAOSWAP_GATE_REFERENCE = new Map([
   [3, { block: 8_830_031, eta: "18 days" }],
@@ -192,6 +211,8 @@ async function captureSnapshot(phase) {
       minerBurnedCodec,
       recycleOrBurnCodec,
       ownerCutEnabledCodec,
+      totalAlphaIssuanceCodec,
+      alphaRecycledCodec,
     ] =
       await Promise.all([
         api.query.subtensorModule.subnetAlphaOut.at(blockHash, netuid),
@@ -203,6 +224,8 @@ async function captureSnapshot(phase) {
         api.query.subtensorModule.minerBurned.at(blockHash, netuid),
         api.query.subtensorModule.recycleOrBurn.at(blockHash, netuid),
         api.query.subtensorModule.ownerCutEnabled.at(blockHash, netuid),
+        api.query.alphaAssets.totalAlphaIssuance.at(blockHash, netuid),
+        api.query.alphaAssets.alphaRecycled.at(blockHash, netuid),
       ]);
     const rpcKingCodec = await getMostConvictedHotkey(blockHash, netuid);
     const alphaOut = codecBigInt(alphaOutCodec);
@@ -305,6 +328,8 @@ async function captureSnapshot(phase) {
       projectedRecycleEmission,
       thresholdBaseGrowth,
       burnedAlpha: burnedAlpha.toString(),
+      totalAlphaIssuance: codecBigInt(totalAlphaIssuanceCodec).toString(),
+      alphaRecycled: codecBigInt(alphaRecycledCodec).toString(),
       protocolAlpha: protocolAlpha.toString(),
       pendingServer: pendingRow.server.toString(),
       pendingValidator: pendingRow.validator.toString(),
@@ -359,15 +384,30 @@ function verifyMigrationEffects(before, after) {
     `historical burn backfill missing on subnet 1: observed ${burnedIncrease}, expected approximately ${NETUID_ONE_HISTORICAL_BURN}`
   );
 
-  const rebases = [...RECYCLED_BURN_OFFSETS].map(([netuid, expected]) => {
+  const rebases = [...RECYCLED_COUNTER_OFFSETS].map(([netuid, expected]) => {
     const beforeRow = beforeByNetuid.get(netuid);
     const afterRow = afterByNetuid.get(netuid);
-    const observed = BigInt(beforeRow.burnedAlpha) - BigInt(afterRow.burnedAlpha);
-    assert.ok(
-      observed * 100n >= expected * 99n,
-      `recycled burn-counter rebase missing on subnet ${netuid}: observed ${observed}, expected approximately ${expected}`
-    );
-    return { netuid, expected: expected.toString(), observed: observed.toString() };
+    const observed = {
+      issuance: BigInt(beforeRow.totalAlphaIssuance) - BigInt(afterRow.totalAlphaIssuance),
+      burned: BigInt(beforeRow.burnedAlpha) - BigInt(afterRow.burnedAlpha),
+      recycled: BigInt(beforeRow.alphaRecycled) - BigInt(afterRow.alphaRecycled),
+    };
+    for (const counter of ["issuance", "burned", "recycled"]) {
+      if (expected[counter] === 0n) continue;
+      assert.ok(
+        absBigInt(observed[counter] - expected[counter]) * 100n <= expected[counter],
+        `recycled ${counter}-counter rebase missing on subnet ${netuid}: observed ${observed[counter]}, expected approximately ${expected[counter]}`
+      );
+    }
+    return {
+      netuid,
+      expected: Object.fromEntries(
+        Object.entries(expected).map(([counter, value]) => [counter, value.toString()])
+      ),
+      observed: Object.fromEntries(
+        Object.entries(observed).map(([counter, value]) => [counter, value.toString()])
+      ),
+    };
   });
 
   return {
@@ -382,7 +422,7 @@ function verifyMigrationEffects(before, after) {
       expected: NETUID_ONE_HISTORICAL_BURN.toString(),
       observed: burnedIncrease.toString(),
     },
-    recycledBurnRebases: rebases,
+    recycledCounterRebases: rebases,
   };
 }
 
@@ -407,6 +447,8 @@ function assertMetadata() {
     ["OwnerCutEnabled", api.query.subtensorModule?.ownerCutEnabled],
     ["MinerBurned", api.query.subtensorModule?.minerBurned],
     ["RecycleOrBurn", api.query.subtensorModule?.recycleOrBurn],
+    ["TotalAlphaIssuance", api.query.alphaAssets?.totalAlphaIssuance],
+    ["AlphaRecycled", api.query.alphaAssets?.alphaRecycled],
     ["HotkeyLock", api.query.subtensorModule?.hotkeyLock],
     ["DecayingHotkeyLock", api.query.subtensorModule?.decayingHotkeyLock],
     ["OwnerLock", api.query.subtensorModule?.ownerLock],
@@ -755,6 +797,7 @@ function renderReport(before, after) {
     `|---|---:|---|---|---:|---:|---:|\n` +
     summaryRow(before) + summaryRow(after) + `\n` +
     migrationFinding(before, after) +
+    migrationCounterSection(after) +
     `The pre-upgrade ownership threshold is \`10% × SubnetAlphaOut\`. The post-upgrade threshold is ` +
     `\`10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)\`. Conviction forecasts roll the ` +
     `four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch ` +
@@ -784,6 +827,19 @@ function renderReport(before, after) {
     `PendingOwnerCut + PendingBasketDeposits\`.\n` +
     `- Calculated staked alpha: saturating \`SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha - pending alpha\`.\n` +
     `- Discrepancy percentage: \`abs(actual - calculated) / calculated × 100\`.\n`;
+}
+
+function migrationCounterSection(after) {
+  const rows = after.migrationChecks.recycledCounterRebases.map(({ netuid, expected, observed }) =>
+    `| ${netuid} | ${formatAlpha(expected.issuance)} | ${formatSignedAlpha(observed.issuance)} | ` +
+    `${formatAlpha(expected.burned)} | ${formatSignedAlpha(observed.burned)} | ` +
+    `${formatAlpha(expected.recycled)} | ${formatSignedAlpha(observed.recycled)} | verified |\n`
+  ).join("");
+  return `### Generation-counter rebase verification\n\n` +
+    `Observed values are pre-upgrade minus post-upgrade counters; small differences from the embedded offsets ` +
+    `come from normal counter activity between snapshots.\n\n` +
+    `| Netuid | Issuance expected α | Issuance observed α | Burned expected α | Burned observed α | Recycled expected α | Recycled observed α | Result |\n` +
+    `|---:|---:|---:|---:|---:|---:|---:|---|\n${rows}\n`;
 }
 
 function taoswapComparison(before, after) {
@@ -843,7 +899,7 @@ function migrationFinding(before, after) {
   const checks = after.migrationChecks;
   const allEffectsApplied = checks?.allMarkers === true &&
     BigInt(checks.alphaOut.observed) >= BigInt(checks.alphaOut.expected) &&
-    checks.recycledBurnRebases.length === RECYCLED_BURN_OFFSETS.size;
+    checks.recycledCounterRebases.length === RECYCLED_COUNTER_OFFSETS.size;
   if (allEffectsApplied) {
     const comparison = observedBackfill === NETUID_ONE_HISTORICAL_BURN
       ? "exactly matched"
@@ -853,8 +909,9 @@ function migrationFinding(before, after) {
       `\`SubnetAlphaOut\` increased by \`${formatAlpha(checks.alphaOut.observed)} α\` including the expected ` +
       `\`${formatAlpha(checks.alphaOut.expected)} α\` repair. Its expected historical burn backfill was ` +
       `approximately \`+${formatAlpha(NETUID_ONE_HISTORICAL_BURN)} α\` and observed ` +
-      `\`+${formatAlpha(observedBackfill)} α\`; this ${comparison}. Burn-counter rebases for subnets ` +
-      `16, 40, and 58 were also observed. After all three migrations, ` +
+      `\`+${formatAlpha(observedBackfill)} α\`; this ${comparison}. Generation-counter rebases for subnets ` +
+      `${[...RECYCLED_COUNTER_OFFSETS.keys()].sort((a, b) => a - b).join(", ")} were also observed. ` +
+      `After all three migrations, ` +
       `\`${after.alphaDiscrepancies.length}\` subnets exceed 1% discrepancy.\n\n`;
   }
   if (after.genesisHash === MAINNET_GENESIS || after.alphaDiscrepancies.length === 0) return "";
