@@ -223,11 +223,14 @@ async function captureSnapshot(phase) {
       block: projectionBlock,
       netuid,
       tempo,
+      registeredAt,
       thresholdAtBlock,
       locks,
       unlockRate,
       maturityRate,
       ownerHotHex: ownerRow.ownerHotHex,
+      ownerColdHex: ownerRow.ownerColdHex,
+      owningColdkeys,
     });
     const projectionScores = scoreLocks(
       locks,
@@ -417,6 +420,7 @@ function projectedThreshold(params) {
 }
 
 function projectGate(params) {
+  const maturityBlock = params.registeredAt + ONE_YEAR_BLOCKS;
   const currentScores = scoreLocks(
     params.locks,
     params.block,
@@ -424,23 +428,42 @@ function projectGate(params) {
     params.maturityRate,
     params.ownerHotHex
   );
-  if (currentScores.total >= params.thresholdAtBlock(params.block)) {
+  if (
+    params.block >= maturityBlock &&
+    currentScores.total >= params.thresholdAtBlock(params.block)
+  ) {
     const king = selectKing(currentScores);
+    const kingColdkey = king ? params.owningColdkeys.get(king.hex) : null;
     return {
       status: "immediate",
       block: params.block,
       blocks: 0,
       conviction: currentScores.total,
       king: king?.address ?? null,
+      kingColdkey: kingColdkey?.address ?? null,
+      changesOwnership: isDifferentOwner(kingColdkey, params.ownerColdHex),
     };
   }
   if (params.tempo === 0) {
-    return { status: "no epochs", block: null, blocks: null, king: null };
+    return {
+      status: "no epochs",
+      block: null,
+      blocks: null,
+      king: null,
+      kingColdkey: null,
+      changesOwnership: false,
+    };
+  }
+
+  let checkBlock = nextEpochBlock(params);
+  while (checkBlock < maturityBlock) {
+    const period = epochPeriod(params.phase, params.tempo);
+    checkBlock += Math.ceil((maturityBlock - checkBlock) / period) * period;
   }
 
   const end = params.block + FORECAST_BLOCKS;
   for (
-    let checkBlock = nextEpochBlock(params);
+    ;
     checkBlock <= end;
     checkBlock += epochPeriod(params.phase, params.tempo)
   ) {
@@ -453,12 +476,15 @@ function projectGate(params) {
     );
     if (scores.total >= params.thresholdAtBlock(checkBlock)) {
       const king = selectKing(scores);
+      const kingColdkey = king ? params.owningColdkeys.get(king.hex) : null;
       return {
         status: "projected",
         block: checkBlock,
         blocks: checkBlock - params.block,
         conviction: scores.total,
         king: king?.address ?? null,
+        kingColdkey: kingColdkey?.address ?? null,
+        changesOwnership: isDifferentOwner(kingColdkey, params.ownerColdHex),
       };
     }
   }
@@ -467,7 +493,17 @@ function projectGate(params) {
     block: null,
     blocks: null,
     king: null,
+    kingColdkey: null,
+    changesOwnership: false,
   };
+}
+
+function isDifferentOwner(kingColdkey, ownerColdHex) {
+  return Boolean(
+    kingColdkey &&
+    !/^0x0+$/.test(kingColdkey.hex) &&
+    kingColdkey.hex !== ownerColdHex
+  );
 }
 
 function nextEpochBlock(params) {
@@ -623,6 +659,9 @@ function renderReport(before, after) {
     `registration age or lock evolution. Forecasts assume no future lock transactions. They increase ` +
     `\`SubnetAlphaOut\` by the snapshot's constant \`SubnetAlphaOutEmission\` rate while holding future burned and ` +
     `protocol-owned alpha constant. All takeover intervals in this report use this moving-threshold method. ` +
+    `A takeover prediction also requires the subnet to pass its one-year ownership age gate. ` +
+    `A threshold crossing is reported as an ownership change only when the projected king belongs to a different ` +
+    `coldkey than the current owner; otherwise the result is \`owner remains king\`. ` +
     `“Not projected” means total conviction did not reach the moving threshold in the ` +
     `${FORECAST_YEARS}-year forecast window.\n\n` +
     taoswapComparison(before, after) +
@@ -661,13 +700,10 @@ function changedTakeoverSection(before, after) {
   const changed = after.subnets
     .map((afterRow) => ({ before: beforeByNetuid.get(afterRow.netuid), after: afterRow }))
     .filter(({ before: beforeRow, after: afterRow }) => {
-      const newlyEndangered =
-        beforeRow.projection.status !== "projected" &&
-        beforeRow.projection.status !== "immediate" &&
-        afterRow.projection.status === "projected" &&
-        afterRow.projection.blocks > 0;
-      return newlyEndangered ||
-        takeoverInterval(beforeRow.projection) !== takeoverInterval(afterRow.projection) ||
+      const beforeChangesOwner = beforeRow.projection.changesOwnership === true;
+      const afterChangesOwner = afterRow.projection.changesOwnership === true;
+      if (!beforeChangesOwner && !afterChangesOwner) return false;
+      return ownershipInterval(beforeRow.projection) !== ownershipInterval(afterRow.projection) ||
         beforeRow.projection.king !== afterRow.projection.king;
     });
   let result = `## Changed subnet ownership takeover predictions\n\n` +
@@ -675,8 +711,8 @@ function changedTakeoverSection(before, after) {
     `|---:|---|---|---|---|\n`;
   if (changed.length === 0) return `${result}| — | — | — | — | — |\n\n`;
   result += changed.map(({ before: beforeRow, after: afterRow }) =>
-    `| ${afterRow.netuid} | ${takeoverInterval(beforeRow.projection)} | ` +
-    `${shortAccount(beforeRow.projection.king)} | ${takeoverInterval(afterRow.projection)} | ` +
+    `| ${afterRow.netuid} | ${ownershipInterval(beforeRow.projection)} | ` +
+    `${shortAccount(beforeRow.projection.king)} | ${ownershipInterval(afterRow.projection)} | ` +
     `${shortAccount(afterRow.projection.king)} |\n`
   ).join("");
   return `${result}\n`;
@@ -686,6 +722,12 @@ function takeoverInterval(projection) {
   if (projection.status === "immediate") return "0";
   if (projection.status === "projected") return formatDuration(projection.blocks);
   return projection.status;
+}
+
+function ownershipInterval(projection) {
+  return projection.changesOwnership === true
+    ? takeoverInterval(projection)
+    : "no ownership change";
 }
 
 function migrationFinding(before, after) {
@@ -725,17 +767,20 @@ function ownershipSection(snapshot) {
     `Snapshot clone block: \`${snapshot.block}\`; projection mainnet block: ` +
     `\`${snapshot.projectionBlock ?? snapshot.block}\` (\`${snapshot.blockHash}\`)\n\n` +
     `Unlock rate: \`${snapshot.unlockRate}\`; maturity rate: \`${snapshot.maturityRate}\`\n\n` +
-    `| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Predicted takeover | Predicted king |\n` +
+    `| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Ownership result | Predicted king |\n` +
     `|---:|---|---|---:|---:|---:|---|---|---|---|\n` +
     snapshot.subnets.map(ownershipRow).join("") + `\n`;
 }
 
 function ownershipRow(row) {
-  const eta = row.projection.status === "immediate"
-    ? "0"
-    : row.projection.status === "projected"
-    ? `${formatDuration(row.projection.blocks)} (block ${row.projection.block})`
-    : row.projection.status;
+  const eta = row.projection.changesOwnership !== true &&
+      (row.projection.status === "immediate" || row.projection.status === "projected")
+    ? "owner remains king"
+    : row.projection.status === "immediate"
+      ? "0"
+      : row.projection.status === "projected"
+        ? `${formatDuration(row.projection.blocks)} (block ${row.projection.block})`
+        : row.projection.status;
   return `| ${row.netuid} | ${shortAccount(row.ownerHotkey)} | ${shortAccount(row.kingHotkey)} | ` +
     `${formatAlphaNumber(row.totalConviction)} | ${formatAlphaNumber(row.threshold)} | ` +
     `${formatAlphaNumber(Number(row.alphaOutEmission) * BLOCKS_PER_DAY / 10)} | ` +

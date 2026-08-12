@@ -1,6 +1,6 @@
 # Subnet ownership conviction and alpha accounting
 
-Generated: 2026-08-12T18:46:39.736Z
+Generated: 2026-08-12T19:13:17.087Z
 
 ## Run summary
 
@@ -11,7 +11,7 @@ Generated: 2026-08-12T18:46:39.736Z
 
 > **Migration verification:** the historical-alpha correction applied on the clone despite its non-mainnet genesis `0x57a26328383c75e8d0089bced04da375d90811ad2b0072633efdccfb1bf13c80`. Subnet 1 expected approximately `+661,707.044125477 α` and observed `+661,707.044125477 α`; this exactly matched. After all migrations, `26` subnets exceed 1% discrepancy.
 
-The pre-upgrade ownership threshold is `10% × SubnetAlphaOut`. The post-upgrade threshold is `10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)`. Conviction forecasts roll the four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch checks. Clone-local block numbers are rebased onto the preserved mainnet BlockHash window before evaluating registration age or lock evolution. Forecasts assume no future lock transactions. They increase `SubnetAlphaOut` by the snapshot's constant `SubnetAlphaOutEmission` rate while holding future burned and protocol-owned alpha constant. All takeover intervals in this report use this moving-threshold method. “Not projected” means total conviction did not reach the moving threshold in the 10-year forecast window.
+The pre-upgrade ownership threshold is `10% × SubnetAlphaOut`. The post-upgrade threshold is `10% × (SubnetAlphaOut - AlphaBurned - SubnetProtocolAlpha)`. Conviction forecasts roll the four aggregate lock buckets forward with the runtime exponential equations and evaluate only scheduled epoch checks. Clone-local block numbers are rebased onto the preserved mainnet BlockHash window before evaluating registration age or lock evolution. Forecasts assume no future lock transactions. They increase `SubnetAlphaOut` by the snapshot's constant `SubnetAlphaOutEmission` rate while holding future burned and protocol-owned alpha constant. All takeover intervals in this report use this moving-threshold method. A takeover prediction also requires the subnet to pass its one-year ownership age gate. A threshold crossing is reported as an ownership change only when the projected king belongs to a different coldkey than the current owner; otherwise the result is `owner remains king`. “Not projected” means total conviction did not reach the moving threshold in the 10-year forecast window.
 
 ## TaoSwap gate-estimate comparison
 
@@ -29,40 +29,28 @@ TaoSwap's API field `gate_eta_days` forecasts when total conviction reaches the 
 
 | Subnet netuid | Predicted takeover time interval before | Predicted takeover king before | Predicted takeover time interval after | Predicted takeover king after |
 |---:|---|---|---|---|
-| 1 | not projected within 10y | — | 0 | `5HCFWvR…1wgDHh` |
 | 3 | 17.1 days | `5E6yHkm…MUpnqG` | 0 | `5E6yHkm…MUpnqG` |
-| 19 | not projected within 10y | — | 0 | `5CK49hD…VAQRfC` |
 | 20 | 3.0 days | `5ED4s3B…qpwW2Q` | 0 | `5ED4s3B…qpwW2Q` |
-| 24 | 16.8 days | `5ELpkVn…e6YVcL` | 3.5 days | `5ELpkVn…e6YVcL` |
-| 28 | not projected within 10y | — | 0 | `5Evgh9Q…5dco3P` |
 | 39 | 22.2 days | `5GP7c3f…SWVCMi` | 0 | `5GP7c3f…SWVCMi` |
-| 40 | not projected within 10y | — | 0 | `5HijSRH…4aiTUs` |
-| 41 | not projected within 10y | — | 0 | `5FCSevL…2DYkXX` |
-| 47 | not projected within 10y | — | 0 | `5Do5iLB…6TcFut` |
-| 76 | not projected within 10y | — | 0 | `5Cw4E2t…6yu5cs` |
 | 81 | 8.8 days | `5H47sFL…n4wdDa` | 0 | `5H47sFL…n4wdDa` |
-| 91 | not projected within 10y | — | 0 | `5FcCsoB…UCyfsw` |
-| 103 | not projected within 10y | — | 0 | — |
-| 113 | not projected within 10y | — | 0 | `5FRumLA…C3M8uB` |
-| 121 | not projected within 10y | — | 0 | `5EL9y2g…34ZdNf` |
 
 ## Before upgrade: subnet kings and takeover projection
 
-Snapshot clone block: `14`; projection mainnet block: `8829634` (`0x829ef6599f33c719c82e111d55dabae6f5c416235c56496d3a3a33a67cda2b2d`)
+Snapshot clone block: `14`; projection mainnet block: `8829634` (`0xd10abd4f2f63c47e28dabad91f4a3597fa5c21d57ff1bc778ade76e78af877cf`)
 
 Unlock rate: `934866`; maturity rate: `311622`
 
-| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Predicted takeover | Predicted king |
+| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Ownership result | Predicted king |
 |---:|---|---|---:|---:|---:|---|---|---|---|
 | 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4781 | 248,442.7267 | 720 | not met | yes | not projected within 10y | — |
-| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 332,852.9356 | 720 | met | yes | 0 | `5CFxLBv…juK17J` |
+| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 332,852.9356 | 720 | met | yes | owner remains king | `5CFxLBv…juK17J` |
 | 3 | `5HdTZQ6…ZXkxmv` | `5E6yHkm…MUpnqG` | 246,383.48 | 280,269.529 | 720 | not met | yes | 17.1 days (block 8952795) | `5E6yHkm…MUpnqG` |
 | 4 | `5Hp18g9…yMR8FM` | `5Hp18g9…yMR8FM` | 183,019.1165 | 350,341.8679 | 720 | not met | yes | not projected within 10y | — |
 | 5 | `5GZ2KuT…t3y7iq` | `5GZ2KuT…t3y7iq` | 6,649.8213 | 299,876.9752 | 720 | not met | yes | not projected within 10y | — |
-| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 271,588.5911 | 720 | met | yes | 0 | `5CfSg4e…GxJrMA` |
+| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 271,588.5911 | 720 | met | yes | owner remains king | `5CfSg4e…GxJrMA` |
 | 7 | `5ChTwrq…AEt8EE` | `5ChTwrq…AEt8EE` | 3,211.2605 | 312,992.9312 | 720 | not met | yes | not projected within 10y | — |
-| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 303,475.1034 | 720 | met | yes | 0 | `5F6tnxz…tQjw8y` |
-| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 394,101.8087 | 720 | met | yes | 0 | `5Fsbube…4mJJZ9` |
+| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 303,475.1034 | 720 | met | yes | owner remains king | `5F6tnxz…tQjw8y` |
+| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 394,101.8087 | 720 | met | yes | owner remains king | `5Fsbube…4mJJZ9` |
 | 10 | `5EvNESR…UNCWAW` | `5EvNESR…UNCWAW` | 19,046.8285 | 311,809.96 | 720 | not met | yes | not projected within 10y | — |
 | 11 | `5ECzcM7…jGyrMS` | `5ECzcM7…jGyrMS` | 46,180.4593 | 298,060.3756 | 720 | not met | yes | not projected within 10y | — |
 | 12 | `5ELzhHv…S96PCp` | `5ELzhHv…S96PCp` | 3,870.5371 | 336,024.5049 | 720 | not met | yes | not projected within 10y | — |
@@ -70,26 +58,26 @@ Unlock rate: `934866`; maturity rate: `311622`
 | 14 | `5FxbrVD…RmQhq7` | `5FxbrVD…RmQhq7` | 54,413.0324 | 305,920.2258 | 720 | not met | yes | not projected within 10y | — |
 | 15 | `5DnqbBi…QxT5FW` | `5DnqbBi…QxT5FW` | 1,010.6516 | 128,285.6272 | 720 | not met | no | not projected within 10y | — |
 | 16 | `5ECWmM2…KyrbNW` | `5Eo5pyN…JdoSG5` | 4,310.2857 | 29,224.9056 | 720 | not met | no | not projected within 10y | — |
-| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2137 | 302,563.9344 | 720 | met | yes | 0 | `5E7eSeR…HCen2B` |
-| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 322,151.8358 | 720 | met | yes | 0 | `5DCSySU…NwoWyG` |
+| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2137 | 302,563.9344 | 720 | met | yes | owner remains king | `5E7eSeR…HCen2B` |
+| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 322,151.8358 | 720 | met | yes | owner remains king | `5DCSySU…NwoWyG` |
 | 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 254,532.5665 | 720 | not met | yes | not projected within 10y | — |
 | 20 | `5EALa14…1qriNk` | `5ED4s3B…qpwW2Q` | 287,654.6206 | 315,157.2118 | 720 | not met | yes | 3.0 days (block 8851337) | `5ED4s3B…qpwW2Q` |
 | 21 | `5EqAzby…orQVHp` | `5EqAzby…orQVHp` | 5,839.6288 | 344,633.8945 | 720 | not met | yes | not projected within 10y | — |
-| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 342,468.5079 | 720 | met | yes | 0 | `5CUu1Qh…oD4dyP` |
-| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.9086 | 404,089.4136 | 720 | met | yes | 0 | `5HKsviv…5rM28H` |
-| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,761.4236 | 364,168.7385 | 720 | not met | yes | 16.8 days (block 8950608) | `5ELpkVn…e6YVcL` |
+| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 342,468.5079 | 720 | met | yes | owner remains king | `5CUu1Qh…oD4dyP` |
+| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.9086 | 404,089.4136 | 720 | met | yes | owner remains king | `5HKsviv…5rM28H` |
+| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,761.4236 | 364,168.7385 | 720 | not met | yes | owner remains king | `5ELpkVn…e6YVcL` |
 | 25 | `5F6aRds…6GiZ4D` | `5F6aRds…6GiZ4D` | 323,519.3728 | 411,655.7161 | 720 | not met | yes | not projected within 10y | — |
 | 26 | `5EHfTi6…Ww3fvP` | `5CCutNm…5ovBbX` | 2,553.3793 | 77,667.1347 | 720 | not met | no | not projected within 10y | — |
 | 27 | `5H6Bqkz…tX1mQw` | `5H6Bqkz…tX1mQw` | 29,259.9793 | 321,707.6984 | 720 | not met | yes | not projected within 10y | — |
 | 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6214 | 465,262.793 | 720 | not met | yes | not projected within 10y | — |
 | 29 | `5HHHHHz…4JfZWn` | `5HHHHHz…4JfZWn` | 3,165.9749 | 289,848.5593 | 720 | not met | yes | not projected within 10y | — |
 | 30 | `5HW12Nv…erK1S1` | `5HW12Nv…erK1S1` | 4,962.5963 | 338,256.6049 | 720 | not met | yes | not projected within 10y | — |
-| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 158,650.0688 | 720 | met | no | 0 | `5CDZ527…pQfftn` |
-| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 342,720.9833 | 720 | met | yes | 0 | `5DWgkCS…uS9Qad` |
+| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 158,650.0688 | 720 | met | no | owner remains king | `5CDZ527…pQfftn` |
+| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 342,720.9833 | 720 | met | yes | owner remains king | `5DWgkCS…uS9Qad` |
 | 33 | `5HinUfk…PYZ8uB` | `5HinUfk…PYZ8uB` | 138,808.5272 | 230,181.9364 | 720 | not met | yes | not projected within 10y | — |
 | 34 | `5HjBSee…TF68LQ` | `5HjBSee…TF68LQ` | 136,306.8908 | 251,773.5175 | 720 | not met | yes | not projected within 10y | — |
 | 35 | `5EsmkLf…dP9vVx` | `5EsmkLf…dP9vVx` | 6,183.1015 | 298,851.9928 | 720 | not met | yes | not projected within 10y | — |
-| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 62,787.9239 | 720 | met | no | 0 | `5Eh5G8B…YWrwmK` |
+| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 62,787.9239 | 720 | met | no | not projected within 10y | — |
 | 37 | `5DXqqdr…EEeW4j` | `5DXqqdr…EEeW4j` | 45,507.1511 | 357,254.4216 | 720 | not met | yes | not projected within 10y | — |
 | 38 | `5HNjFeS…pgBp1n` | `5HNjFeS…pgBp1n` | 38,442.6259 | 147,308.3216 | 720 | not met | no | not projected within 10y | — |
 | 39 | `5G3qVaX…6qMmbC` | `5GP7c3f…SWVCMi` | 186,554.9447 | 316,642.3553 | 720 | not met | yes | 22.2 days (block 8989581) | `5GP7c3f…SWVCMi` |
@@ -104,102 +92,102 @@ Unlock rate: `934866`; maturity rate: `311622`
 | 48 | `5D2Qc9u…i943ch` | `5D2Qc9u…i943ch` | 101,862.5593 | 310,752.305 | 720 | not met | yes | not projected within 10y | — |
 | 49 | `5DLYBBC…BnrAgn` | `5DLYBBC…BnrAgn` | 80,451.6023 | 201,786.4081 | 720 | not met | no | not projected within 10y | — |
 | 50 | `5DxyiWp…c2sJkD` | `5DxyiWp…c2sJkD` | 212,500.0052 | 323,690.305 | 720 | not met | yes | not projected within 10y | — |
-| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4615 | 369,483.2879 | 720 | met | yes | 0 | `5FTVrwE…ZouKg1` |
+| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4615 | 369,483.2879 | 720 | met | yes | owner remains king | `5FTVrwE…ZouKg1` |
 | 52 | `5EgfUiH…gLrVuz` | `5EgfUiH…gLrVuz` | 167,638.3546 | 295,210.5071 | 720 | not met | yes | not projected within 10y | — |
 | 53 | `5DXSBCC…sc1uvJ` | `5DXSBCC…sc1uvJ` | 87,530.2664 | 458,744.3088 | 720 | not met | yes | not projected within 10y | — |
-| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 377,419.4692 | 720 | met | yes | 0 | `5DUB7kN…L9Wgpr` |
+| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 377,419.4692 | 720 | met | yes | owner remains king | `5DUB7kN…L9Wgpr` |
 | 55 | `5DJ5fT1…1KfYVd` | `5DJ5fT1…1KfYVd` | 14,841.8669 | 279,932.5289 | 720 | not met | yes | not projected within 10y | — |
-| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 264,639.4264 | 720 | met | yes | 0 | `5GU4Xkd…1mVXFu` |
+| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 264,639.4264 | 720 | met | yes | owner remains king | `5GU4Xkd…1mVXFu` |
 | 57 | `5Ejcqsb…U3g5MN` | `5Ejcqsb…U3g5MN` | 1,254.307 | 82,576.5111 | 720 | not met | no | not projected within 10y | — |
-| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 29,729.1291 | 720 | met | no | 0 | `5EPXZrL…jJ3GHz` |
-| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.7258 | 319,372.1959 | 720 | met | yes | 0 | `5EF9dnw…FjNdve` |
-| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,423.1645 | 373,892.6574 | 720 | met | yes | 0 | `5CXLwkK…hA9rhR` |
-| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 436,863.9105 | 720 | met | yes | 0 | `5ECEsYL…c8jUbn` |
+| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 29,729.1291 | 720 | met | no | not projected within 10y | — |
+| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.7258 | 319,372.1959 | 720 | met | yes | owner remains king | `5EF9dnw…FjNdve` |
+| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,423.1645 | 373,892.6574 | 720 | met | yes | owner remains king | `5CXLwkK…hA9rhR` |
+| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 436,863.9105 | 720 | met | yes | owner remains king | `5ECEsYL…c8jUbn` |
 | 62 | `5EsNzkZ…kTcicD` | `5EsNzkZ…kTcicD` | 148,964.7262 | 263,936.9639 | 720 | not met | yes | not projected within 10y | — |
 | 63 | `5GmpedV…RR4e1B` | `5GmpedV…RR4e1B` | 72,397.9924 | 381,725.1354 | 720 | not met | yes | not projected within 10y | — |
-| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7225 | 334,075.8563 | 720 | met | yes | 0 | `5CS3g6n…Ks2xbV` |
+| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7225 | 334,075.8563 | 720 | met | yes | owner remains king | `5CS3g6n…Ks2xbV` |
 | 65 | `5DAmVrU…q6mHHL` | `5DAmVrU…q6mHHL` | 171,794.1502 | 322,317.5027 | 720 | not met | yes | not projected within 10y | — |
-| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 335,555.5768 | 720 | met | yes | 0 | `5DRPoRi…MzcpZV` |
+| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 335,555.5768 | 720 | met | yes | owner remains king | `5DRPoRi…MzcpZV` |
 | 67 | `5Cm4fAT…koT7Rt` | `5Cm4fAT…koT7Rt` | 522.2833 | 81,822.3006 | 720 | not met | no | not projected within 10y | — |
-| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,811.4716 | 360,650.413 | 720 | met | yes | 0 | `5CSuegT…4rQbbb` |
+| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,811.4716 | 360,650.413 | 720 | met | yes | owner remains king | `5CSuegT…4rQbbb` |
 | 69 | `5FWB5CF…qWjkg5` | `5FWB5CF…qWjkg5` | 485.8134 | 112,774.5984 | 720 | not met | no | not projected within 10y | — |
 | 70 | `5DFxKep…L6QD6o` | — | 0 | 3,832.1224 | 720 | not met | no | not projected within 10y | — |
 | 71 | `5FNVgRn…xEBLo9` | `5FNVgRn…xEBLo9` | 63,565.0864 | 418,511.0678 | 720 | not met | yes | not projected within 10y | — |
-| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,433.7229 | 248,679.3252 | 720 | met | yes | 0 | `5DUuFhF…16k2GU` |
-| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.1049 | 328,037.092 | 720 | met | yes | 0 | `5Dnkprj…K8pFhW` |
-| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 333,591.1259 | 720 | met | yes | 0 | `5Dnffft…bXGH7L` |
-| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 350,855.3337 | 720 | met | yes | 0 | `5G1Qj93…sQzs6g` |
+| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,433.7229 | 248,679.3252 | 720 | met | yes | owner remains king | `5DUuFhF…16k2GU` |
+| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.1049 | 328,037.092 | 720 | met | yes | owner remains king | `5Dnkprj…K8pFhW` |
+| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 333,591.1259 | 720 | met | yes | owner remains king | `5Dnffft…bXGH7L` |
+| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 350,855.3337 | 720 | met | yes | owner remains king | `5G1Qj93…sQzs6g` |
 | 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 101,467.0381 | 720 | not met | no | not projected within 10y | — |
-| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 321,182.9798 | 720 | met | yes | 0 | `5DqALXR…DdohsE` |
+| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 321,182.9798 | 720 | met | yes | owner remains king | `5DqALXR…DdohsE` |
 | 78 | `5Fk765B…yDWsuk` | `5Fk765B…yDWsuk` | 525.3312 | 65,003.7487 | 720 | not met | no | not projected within 10y | — |
-| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 352,217.2967 | 720 | met | yes | 0 | `5EWwdZB…6HSxoF` |
+| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 352,217.2967 | 720 | met | yes | owner remains king | `5EWwdZB…6HSxoF` |
 | 80 | `5HTwtyt…2N1Zo6` | `5HTwtyt…2N1Zo6` | 3,993.8813 | 180,579.7602 | 720 | not met | no | not projected within 10y | — |
 | 81 | `5F9uEDD…jcQfij` | `5H47sFL…n4wdDa` | 198,529.5915 | 260,434.3932 | 720 | not met | yes | 8.8 days (block 8892791) | `5H47sFL…n4wdDa` |
 | 82 | `5GNyvcC…yhZHgW` | `5GNyvcC…yhZHgW` | 744.3143 | 63,703.483 | 720 | not met | no | not projected within 10y | — |
 | 83 | `5EHGayL…ZH9Q5L` | `5EHGayL…ZH9Q5L` | 8,057.3409 | 265,515.8095 | 720 | not met | yes | not projected within 10y | — |
 | 84 | `5EjbqZD…kLpVAF` | `5EjbqZD…kLpVAF` | 660.4364 | 57,329.2242 | 720 | not met | no | not projected within 10y | — |
 | 85 | `5FR392L…Sgwxhb` | `5FR392L…Sgwxhb` | 143,874.4068 | 250,783.5098 | 720 | not met | yes | not projected within 10y | — |
-| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | no | 0 | — |
-| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,808.9605 | 150,726.0582 | 720 | met | no | 0 | `5Do9743…7cQsN5` |
-| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 345,802.6149 | 720 | met | yes | 0 | `5HK4vbG…LPgXpY` |
+| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | no | owner remains king | — |
+| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,808.9605 | 150,726.0582 | 720 | met | no | not projected within 10y | — |
+| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 345,802.6149 | 720 | met | yes | owner remains king | `5HK4vbG…LPgXpY` |
 | 89 | `5FCN4P1…JBhBLd` | `5FCN4P1…JBhBLd` | 6,094.6321 | 276,393.0852 | 720 | not met | yes | not projected within 10y | — |
-| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 14,011.7393 | 720 | met | no | 0 | `5EKtGWq…piSTEE` |
+| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 14,011.7393 | 720 | met | no | not projected within 10y | — |
 | 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,528.1935 | 99,345.2177 | 720 | not met | no | not projected within 10y | — |
 | 92 | `5FeHbWK…s4UJGc` | — | 0 | 38,288.0229 | 720 | not met | no | not projected within 10y | — |
-| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.2761 | 318,020.241 | 720 | met | yes | 0 | `5DAoDtM…DhfNNK` |
+| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.2761 | 318,020.241 | 720 | met | yes | owner remains king | `5DAoDtM…DhfNNK` |
 | 94 | `5EeKtCK…Ng6Dvj` | `5EeKtCK…Ng6Dvj` | 273.723 | 158,283.2578 | 720 | not met | no | not projected within 10y | — |
 | 95 | `5ExqqyE…k7n7HP` | `5ExqqyE…k7n7HP` | 9,024.9977 | 282,349.8049 | 720 | not met | yes | not projected within 10y | — |
-| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.9177 | 67,292.8803 | 720 | met | no | 0 | `5GpKXtt…jWMz8c` |
+| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.9177 | 67,292.8803 | 720 | met | no | not projected within 10y | — |
 | 97 | `5EvHrbH…ZrBcxZ` | `5EvHrbH…ZrBcxZ` | 7,940.3318 | 94,169.5694 | 720 | not met | no | not projected within 10y | — |
-| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,403.3988 | 279,026.8348 | 720 | met | yes | 0 | `5HWVxik…BtFxvK` |
+| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,403.3988 | 279,026.8348 | 720 | met | yes | owner remains king | `5HWVxik…BtFxvK` |
 | 99 | `5FWbrcG…MwSeGD` | — | 0 | 21,753.4329 | 720 | not met | no | not projected within 10y | — |
-| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,265.807 | 179,979.4096 | 720 | met | no | 0 | `5HdSGJg…xTvKfe` |
+| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,265.807 | 179,979.4096 | 720 | met | no | not projected within 10y | — |
 | 101 | `5H6Dezn…UAS2Zj` | `5H6Dezn…UAS2Zj` | 13,574.6134 | 230,150.9793 | 720 | not met | yes | not projected within 10y | — |
 | 102 | `5EEinUE…EqKkC9` | `5EEinUE…EqKkC9` | 2,002.3405 | 84,314.4315 | 720 | not met | no | not projected within 10y | — |
 | 103 | `5E529AK…8SbwGV` | — | 0 | 9,667.0397 | 720 | not met | no | not projected within 10y | — |
 | 104 | `5Coeuhi…kWYG6y` | `5Coeuhi…kWYG6y` | 3,017.9211 | 306,296.8343 | 720 | not met | yes | not projected within 10y | — |
-| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,542.2244 | 192,217.8635 | 720 | met | no | 0 | `5HBSExJ…DHHTY4` |
-| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,897.0215 | 237,698.6761 | 720 | met | yes | 0 | `5D7FVSM…ezvyHy` |
+| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,542.2244 | 192,217.8635 | 720 | met | no | not projected within 10y | — |
+| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,897.0215 | 237,698.6761 | 720 | met | yes | owner remains king | `5D7FVSM…ezvyHy` |
 | 107 | `5E4WJ2t…mUT3Ju` | `5E4WJ2t…mUT3Ju` | 41,164.694 | 141,230.9405 | 720 | not met | no | not projected within 10y | — |
-| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,529.4043 | 153,052.0515 | 720 | met | no | 0 | `5CAxp9f…j7oTWh` |
-| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3408 | 140,892.5282 | 720 | met | no | 0 | `5DyQkk4…Vd3XUk` |
+| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,529.4043 | 153,052.0515 | 720 | met | no | not projected within 10y | — |
+| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3408 | 140,892.5282 | 720 | met | no | not projected within 10y | — |
 | 110 | `5CwckYm…2Q9rvp` | `5CwckYm…2Q9rvp` | 9,205.9219 | 249,296.8945 | 720 | not met | yes | not projected within 10y | — |
 | 111 | `5ExhNF8…NRmaN5` | `5ExhNF8…NRmaN5` | 1,221.605 | 344,269.9712 | 720 | not met | yes | not projected within 10y | — |
 | 112 | `5E1ohAs…2jFvCt` | `5E1ohAs…2jFvCt` | 9,192.0168 | 186,576.7737 | 720 | not met | yes | not projected within 10y | — |
 | 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,417.7827 | 142,647.9254 | 720 | not met | no | not projected within 10y | — |
-| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 139,459.2219 | 720 | met | no | 0 | `5H1nRfb…KpUKju` |
+| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 139,459.2219 | 720 | met | no | not projected within 10y | — |
 | 115 | `5EhTo9A…GZKgTV` | `5EhTo9A…GZKgTV` | 2,942.0083 | 152,749.6977 | 720 | not met | yes | not projected within 10y | — |
 | 116 | `5CXN6pP…ENsub5` | `5CXN6pP…ENsub5` | 30.4505 | 49,832.7033 | 720 | not met | no | not projected within 10y | — |
-| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,680.6834 | 157,739.1159 | 720 | met | yes | 0 | `5DwRMxJ…RozmGE` |
+| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,680.6834 | 157,739.1159 | 720 | met | yes | owner remains king | `5DwRMxJ…RozmGE` |
 | 118 | `5HmP973…7FsmZz` | `5HmP973…7FsmZz` | 118,221.0028 | 202,405.392 | 720 | not met | yes | not projected within 10y | — |
 | 119 | `5HMwvi1…75JNd4` | `5HMwvi1…75JNd4` | 20,722.5426 | 149,334.0518 | 720 | not met | yes | not projected within 10y | — |
 | 120 | `5HmYnmU…1Qqzb8` | `5HmYnmU…1Qqzb8` | 72,233.8026 | 254,673.8725 | 720 | not met | yes | not projected within 10y | — |
 | 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 276,665.1954 | 720 | not met | yes | not projected within 10y | — |
-| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,469.4307 | 49,483.645 | 720 | met | no | 0 | `5CfPqfa…dnJyYB` |
-| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 185,035.9345 | 720 | met | yes | 0 | `5GxsywP…Nba82o` |
-| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 330,479.0221 | 720 | met | yes | 0 | `5GZPtUj…AEDjmt` |
+| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,469.4307 | 49,483.645 | 720 | met | no | not projected within 10y | — |
+| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 185,035.9345 | 720 | met | yes | owner remains king | `5GxsywP…Nba82o` |
+| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 330,479.0221 | 720 | met | yes | owner remains king | `5GZPtUj…AEDjmt` |
 | 125 | `5CFFoku…Kuydnx` | `5CFFoku…Kuydnx` | 45,923.6629 | 232,582.643 | 720 | not met | yes | not projected within 10y | — |
-| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,563.9071 | 110,764.0577 | 720 | met | no | 0 | `5FZD47W…AJ5ggD` |
+| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,563.9071 | 110,764.0577 | 720 | met | no | not projected within 10y | — |
 | 127 | `5EKrpcq…58gtb5` | `5EKrpcq…58gtb5` | 5,535.6746 | 280,282.4648 | 720 | not met | yes | not projected within 10y | — |
 | 128 | `5FpsgU3…Ewt9h8` | `5FpsgU3…Ewt9h8` | 3,774.5742 | 267,679.0344 | 720 | not met | yes | not projected within 10y | — |
 
 ## After upgrade: subnet kings and takeover projection
 
-Snapshot clone block: `21`; projection mainnet block: `8829641` (`0x71a13087d7ee8827d5c086f8808481e27453c3667c380e7be4763f5c2becfdc3`)
+Snapshot clone block: `21`; projection mainnet block: `8829641` (`0x603d35e893c5cbf32a5d48fddf7e22a8e72877dc93d62cd038468e7479d89dcb`)
 
 Unlock rate: `934866`; maturity rate: `311622`
 
-| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Predicted takeover | Predicted king |
+| Netuid | Current owner hotkey | RPC king | Conviction α | Required α now | Threshold growth α/day | Gate | Mature | Ownership result | Predicted king |
 |---:|---|---|---:|---:|---:|---|---|---|---|
-| 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4781 | 164,050.6279 | 720 | met | yes | 0 | `5HCFWvR…1wgDHh` |
-| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 269,254.488 | 720 | met | yes | 0 | `5CFxLBv…juK17J` |
+| 1 | `5HCFWvR…1wgDHh` | `5HCFWvR…1wgDHh` | 192,833.4781 | 164,050.6279 | 720 | met | yes | owner remains king | `5HCFWvR…1wgDHh` |
+| 2 | `5CFxLBv…juK17J` | `5CFxLBv…juK17J` | 1,144,508.2618 | 269,254.488 | 720 | met | yes | owner remains king | `5CFxLBv…juK17J` |
 | 3 | `5HdTZQ6…ZXkxmv` | `5E6yHkm…MUpnqG` | 246,386.6651 | 205,971.1071 | 720 | met | yes | 0 | `5E6yHkm…MUpnqG` |
 | 4 | `5Hp18g9…yMR8FM` | `5Hp18g9…yMR8FM` | 183,019.1165 | 279,298.7767 | 720 | not met | yes | not projected within 10y | — |
 | 5 | `5GZ2KuT…t3y7iq` | `5GZ2KuT…t3y7iq` | 6,649.8213 | 150,691.3671 | 720 | not met | yes | not projected within 10y | — |
-| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 243,343.4459 | 720 | met | yes | 0 | `5CfSg4e…GxJrMA` |
+| 6 | `5CfSg4e…GxJrMA` | `5CfSg4e…GxJrMA` | 662,466.4595 | 243,343.4459 | 720 | met | yes | owner remains king | `5CfSg4e…GxJrMA` |
 | 7 | `5ChTwrq…AEt8EE` | `5ChTwrq…AEt8EE` | 3,211.2605 | 307,077.4512 | 720 | not met | yes | not projected within 10y | — |
-| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 218,532.0127 | 720 | met | yes | 0 | `5F6tnxz…tQjw8y` |
-| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 264,396.3118 | 720 | met | yes | 0 | `5Fsbube…4mJJZ9` |
+| 8 | `5F6tnxz…tQjw8y` | `5F6tnxz…tQjw8y` | 607,572.4092 | 218,532.0127 | 720 | met | yes | owner remains king | `5F6tnxz…tQjw8y` |
+| 9 | `5Fsbube…4mJJZ9` | `5Fsbube…4mJJZ9` | 566,487.0033 | 264,396.3118 | 720 | met | yes | owner remains king | `5Fsbube…4mJJZ9` |
 | 10 | `5EvNESR…UNCWAW` | `5EvNESR…UNCWAW` | 19,046.7987 | 239,523.2055 | 720 | not met | yes | not projected within 10y | — |
 | 11 | `5ECzcM7…jGyrMS` | `5ECzcM7…jGyrMS` | 46,180.4593 | 170,546.6559 | 720 | not met | yes | not projected within 10y | — |
 | 12 | `5ELzhHv…S96PCp` | `5ELzhHv…S96PCp` | 3,870.5371 | 183,811.9397 | 720 | not met | yes | not projected within 10y | — |
@@ -207,116 +195,116 @@ Unlock rate: `934866`; maturity rate: `311622`
 | 14 | `5FxbrVD…RmQhq7` | `5FxbrVD…RmQhq7` | 54,412.9077 | 174,902.4784 | 720 | not met | yes | not projected within 10y | — |
 | 15 | `5DnqbBi…QxT5FW` | `5DnqbBi…QxT5FW` | 1,010.6516 | 70,976.0699 | 720 | not met | no | not projected within 10y | — |
 | 16 | `5ECWmM2…KyrbNW` | `5Eo5pyN…JdoSG5` | 4,310.3536 | 17,663.9146 | 720 | not met | no | not projected within 10y | — |
-| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2649 | 257,312.8071 | 720 | met | yes | 0 | `5E7eSeR…HCen2B` |
-| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 270,930.9989 | 720 | met | yes | 0 | `5DCSySU…NwoWyG` |
-| 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 153,946.021 | 720 | met | yes | 0 | `5CK49hD…VAQRfC` |
+| 17 | `5E7eSeR…HCen2B` | `5E7eSeR…HCen2B` | 487,150.2649 | 257,312.8071 | 720 | met | yes | owner remains king | `5E7eSeR…HCen2B` |
+| 18 | `5DCSySU…NwoWyG` | `5DCSySU…NwoWyG` | 472,285.7962 | 270,930.9989 | 720 | met | yes | owner remains king | `5DCSySU…NwoWyG` |
+| 19 | `5CK49hD…VAQRfC` | `5CK49hD…VAQRfC` | 169,090.9668 | 153,946.021 | 720 | met | yes | owner remains king | `5CK49hD…VAQRfC` |
 | 20 | `5EALa14…1qriNk` | `5ED4s3B…qpwW2Q` | 287,664.7095 | 183,356.0027 | 720 | met | yes | 0 | `5ED4s3B…qpwW2Q` |
 | 21 | `5EqAzby…orQVHp` | `5EqAzby…orQVHp` | 5,839.6288 | 262,225.6099 | 720 | not met | yes | not projected within 10y | — |
-| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 223,504.9097 | 720 | met | yes | 0 | `5CUu1Qh…oD4dyP` |
-| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.6893 | 269,832.3056 | 720 | met | yes | 0 | `5HKsviv…5rM28H` |
-| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,768.835 | 294,678.4884 | 720 | not met | yes | 3.5 days (block 8854873) | `5ELpkVn…e6YVcL` |
+| 22 | `5CUu1Qh…oD4dyP` | `5CUu1Qh…oD4dyP` | 763,677.5863 | 223,504.9097 | 720 | met | yes | owner remains king | `5CUu1Qh…oD4dyP` |
+| 23 | `5HKsviv…5rM28H` | `5HKsviv…5rM28H` | 476,839.6893 | 269,832.3056 | 720 | met | yes | owner remains king | `5HKsviv…5rM28H` |
+| 24 | `5ELpkVn…e6YVcL` | `5ELpkVn…e6YVcL` | 271,768.835 | 294,678.4884 | 720 | not met | yes | owner remains king | `5ELpkVn…e6YVcL` |
 | 25 | `5F6aRds…6GiZ4D` | `5F6aRds…6GiZ4D` | 323,519.3728 | 324,387.2702 | 720 | not met | yes | not projected within 10y | — |
 | 26 | `5EHfTi6…Ww3fvP` | `5CCutNm…5ovBbX` | 2,553.4326 | 66,938.1342 | 720 | not met | no | not projected within 10y | — |
 | 27 | `5H6Bqkz…tX1mQw` | `5H6Bqkz…tX1mQw` | 29,259.9793 | 199,148.1014 | 720 | not met | yes | not projected within 10y | — |
-| 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6214 | 312,609.865 | 720 | met | yes | 0 | `5Evgh9Q…5dco3P` |
+| 28 | `5Evgh9Q…5dco3P` | `5Evgh9Q…5dco3P` | 434,349.6214 | 312,609.865 | 720 | met | yes | owner remains king | `5Evgh9Q…5dco3P` |
 | 29 | `5HHHHHz…4JfZWn` | `5HHHHHz…4JfZWn` | 3,165.9749 | 228,766.324 | 720 | not met | yes | not projected within 10y | — |
 | 30 | `5HW12Nv…erK1S1` | `5HW12Nv…erK1S1` | 4,962.5963 | 264,942.4257 | 720 | not met | yes | not projected within 10y | — |
-| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 88,756.4692 | 720 | met | no | 0 | `5CDZ527…pQfftn` |
-| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 331,481.7094 | 720 | met | yes | 0 | `5DWgkCS…uS9Qad` |
+| 31 | `5CDZ527…pQfftn` | `5CDZ527…pQfftn` | 380,738.7268 | 88,756.4692 | 720 | met | no | owner remains king | `5CDZ527…pQfftn` |
+| 32 | `5DWgkCS…uS9Qad` | `5DWgkCS…uS9Qad` | 634,410.2189 | 331,481.7094 | 720 | met | yes | owner remains king | `5DWgkCS…uS9Qad` |
 | 33 | `5HinUfk…PYZ8uB` | `5HinUfk…PYZ8uB` | 138,808.5272 | 163,021.3729 | 720 | not met | yes | not projected within 10y | — |
 | 34 | `5HjBSee…TF68LQ` | `5HjBSee…TF68LQ` | 136,306.4068 | 202,474.7707 | 720 | not met | yes | not projected within 10y | — |
 | 35 | `5EsmkLf…dP9vVx` | `5EsmkLf…dP9vVx` | 6,183.0949 | 262,604.238 | 720 | not met | yes | not projected within 10y | — |
-| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 45,906.0868 | 720 | met | no | 0 | `5Eh5G8B…YWrwmK` |
+| 36 | `5Eh5G8B…YWrwmK` | `5Eh5G8B…YWrwmK` | 113,723.9894 | 45,906.0868 | 720 | met | no | not projected within 10y | — |
 | 37 | `5DXqqdr…EEeW4j` | `5DXqqdr…EEeW4j` | 45,507.1511 | 236,326.977 | 720 | not met | yes | not projected within 10y | — |
 | 38 | `5HNjFeS…pgBp1n` | `5HNjFeS…pgBp1n` | 38,442.3408 | 88,287.4979 | 720 | not met | no | not projected within 10y | — |
 | 39 | `5G3qVaX…6qMmbC` | `5GP7c3f…SWVCMi` | 186,563.1381 | 167,697.3508 | 720 | met | yes | 0 | `5GP7c3f…SWVCMi` |
-| 40 | `5HijSRH…4aiTUs` | `5HijSRH…4aiTUs` | 22,427.8984 | 12,481.3005 | 720 | met | no | 0 | `5HijSRH…4aiTUs` |
-| 41 | `5FCSevL…2DYkXX` | `5FCSevL…2DYkXX` | 258,549.3693 | 178,420.6751 | 720 | met | yes | 0 | `5FCSevL…2DYkXX` |
+| 40 | `5HijSRH…4aiTUs` | `5HijSRH…4aiTUs` | 22,427.8984 | 12,481.3005 | 720 | met | no | not projected within 10y | — |
+| 41 | `5FCSevL…2DYkXX` | `5FCSevL…2DYkXX` | 258,549.3693 | 178,420.6751 | 720 | met | yes | owner remains king | `5FCSevL…2DYkXX` |
 | 42 | `5Gbdb5s…vf6jUJ` | `5Gbdb5s…vf6jUJ` | 5,444.0166 | 216,439.5585 | 720 | not met | yes | not projected within 10y | — |
 | 43 | `5HjMs5J…XJS9HC` | `5HjMs5J…XJS9HC` | 3,451.0692 | 219,448.4543 | 720 | not met | yes | not projected within 10y | — |
 | 44 | `5FsREvy…1nQkwu` | `5FsREvy…1nQkwu` | 245,862.4495 | 337,918.7954 | 720 | not met | yes | not projected within 10y | — |
 | 45 | `5Hmiaz4…X674DD` | `5Hmiaz4…X674DD` | 111,019.2916 | 198,986.1353 | 720 | not met | yes | not projected within 10y | — |
 | 46 | `5CDnZ6o…9QdM6D` | `5CDnZ6o…9QdM6D` | 173,962.9907 | 249,686.4057 | 720 | not met | yes | not projected within 10y | — |
-| 47 | `5GjN9n3…MfdEWj` | `5Do5iLB…6TcFut` | 98,594.0183 | 68,394.7628 | 720 | met | no | 0 | `5Do5iLB…6TcFut` |
+| 47 | `5GjN9n3…MfdEWj` | `5Do5iLB…6TcFut` | 98,594.0183 | 68,394.7628 | 720 | met | no | not projected within 10y | — |
 | 48 | `5D2Qc9u…i943ch` | `5D2Qc9u…i943ch` | 101,862.5593 | 231,037.2729 | 720 | not met | yes | not projected within 10y | — |
 | 49 | `5DLYBBC…BnrAgn` | `5DLYBBC…BnrAgn` | 80,451.6023 | 115,931.7403 | 720 | not met | no | not projected within 10y | — |
 | 50 | `5DxyiWp…c2sJkD` | `5DxyiWp…c2sJkD` | 212,500.0052 | 272,902.4618 | 720 | not met | yes | not projected within 10y | — |
-| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4613 | 237,049.1522 | 720 | met | yes | 0 | `5FTVrwE…ZouKg1` |
+| 51 | `5FTVrwE…ZouKg1` | `5FTVrwE…ZouKg1` | 455,619.4613 | 237,049.1522 | 720 | met | yes | owner remains king | `5FTVrwE…ZouKg1` |
 | 52 | `5EgfUiH…gLrVuz` | `5EgfUiH…gLrVuz` | 167,638.3546 | 187,485.9614 | 720 | not met | yes | not projected within 10y | — |
 | 53 | `5DXSBCC…sc1uvJ` | `5DXSBCC…sc1uvJ` | 87,530.2664 | 398,377.3563 | 720 | not met | yes | not projected within 10y | — |
-| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 316,751.5673 | 720 | met | yes | 0 | `5DUB7kN…L9Wgpr` |
+| 54 | `5DUB7kN…L9Wgpr` | `5DUB7kN…L9Wgpr` | 644,081.4257 | 316,751.5673 | 720 | met | yes | owner remains king | `5DUB7kN…L9Wgpr` |
 | 55 | `5DJ5fT1…1KfYVd` | `5DJ5fT1…1KfYVd` | 14,841.8669 | 238,869.3572 | 720 | not met | yes | not projected within 10y | — |
-| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 185,791.7426 | 720 | met | yes | 0 | `5GU4Xkd…1mVXFu` |
+| 56 | `5GU4Xkd…1mVXFu` | `5GU4Xkd…1mVXFu` | 264,724.1855 | 185,791.7426 | 720 | met | yes | owner remains king | `5GU4Xkd…1mVXFu` |
 | 57 | `5Ejcqsb…U3g5MN` | `5Ejcqsb…U3g5MN` | 1,254.307 | 43,756.011 | 720 | not met | no | not projected within 10y | — |
-| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 13,533.1523 | 720 | met | no | 0 | `5EPXZrL…jJ3GHz` |
-| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.6124 | 262,990.6676 | 720 | met | yes | 0 | `5EF9dnw…FjNdve` |
-| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,422.6674 | 306,944.6083 | 720 | met | yes | 0 | `5CXLwkK…hA9rhR` |
-| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 347,892.6574 | 720 | met | yes | 0 | `5ECEsYL…c8jUbn` |
+| 58 | `5EPXZrL…jJ3GHz` | `5EPXZrL…jJ3GHz` | 32,808.0276 | 13,533.1523 | 720 | met | no | not projected within 10y | — |
+| 59 | `5EF9dnw…FjNdve` | `5EF9dnw…FjNdve` | 387,345.6124 | 262,990.6676 | 720 | met | yes | owner remains king | `5EF9dnw…FjNdve` |
+| 60 | `5CXLwkK…hA9rhR` | `5CXLwkK…hA9rhR` | 1,073,422.6674 | 306,944.6083 | 720 | met | yes | owner remains king | `5CXLwkK…hA9rhR` |
+| 61 | `5ECEsYL…c8jUbn` | `5ECEsYL…c8jUbn` | 1,021,287.8842 | 347,892.6574 | 720 | met | yes | owner remains king | `5ECEsYL…c8jUbn` |
 | 62 | `5EsNzkZ…kTcicD` | `5EsNzkZ…kTcicD` | 148,964.6978 | 241,209.8741 | 720 | not met | yes | not projected within 10y | — |
 | 63 | `5GmpedV…RR4e1B` | `5GmpedV…RR4e1B` | 72,397.9924 | 294,469.6532 | 720 | not met | yes | not projected within 10y | — |
-| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7145 | 290,608.1082 | 720 | met | yes | 0 | `5CS3g6n…Ks2xbV` |
+| 64 | `5CS3g6n…Ks2xbV` | `5CS3g6n…Ks2xbV` | 725,047.7145 | 290,608.1082 | 720 | met | yes | owner remains king | `5CS3g6n…Ks2xbV` |
 | 65 | `5DAmVrU…q6mHHL` | `5DAmVrU…q6mHHL` | 171,794.1502 | 228,375.9179 | 720 | not met | yes | not projected within 10y | — |
-| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 239,591.0128 | 720 | met | yes | 0 | `5DRPoRi…MzcpZV` |
+| 66 | `5DRPoRi…MzcpZV` | `5DRPoRi…MzcpZV` | 392,806.5918 | 239,591.0128 | 720 | met | yes | owner remains king | `5DRPoRi…MzcpZV` |
 | 67 | `5Cm4fAT…koT7Rt` | `5Cm4fAT…koT7Rt` | 522.2833 | 41,032.9326 | 720 | not met | no | not projected within 10y | — |
-| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,809.963 | 275,535.718 | 720 | met | yes | 0 | `5CSuegT…4rQbbb` |
+| 68 | `5CSuegT…4rQbbb` | `5CSuegT…4rQbbb` | 601,809.963 | 275,535.718 | 720 | met | yes | owner remains king | `5CSuegT…4rQbbb` |
 | 69 | `5FWB5CF…qWjkg5` | `5FWB5CF…qWjkg5` | 485.8134 | 78,646.9982 | 720 | not met | no | not projected within 10y | — |
 | 70 | `5DFxKep…L6QD6o` | — | 0 | 3,818.0055 | 720 | not met | no | not projected within 10y | — |
 | 71 | `5FNVgRn…xEBLo9` | `5FNVgRn…xEBLo9` | 63,565.0864 | 322,297.3954 | 720 | not met | yes | not projected within 10y | — |
-| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,429.9907 | 210,352.6527 | 720 | met | yes | 0 | `5DUuFhF…16k2GU` |
-| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.5734 | 181,142.3851 | 720 | met | yes | 0 | `5Dnkprj…K8pFhW` |
-| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 270,983.4493 | 720 | met | yes | 0 | `5Dnffft…bXGH7L` |
-| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 270,705.978 | 720 | met | yes | 0 | `5G1Qj93…sQzs6g` |
-| 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 53,478.3487 | 720 | met | no | 0 | `5Cw4E2t…6yu5cs` |
-| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 251,019.6567 | 720 | met | yes | 0 | `5DqALXR…DdohsE` |
+| 72 | `5DUuFhF…16k2GU` | `5DUuFhF…16k2GU` | 504,429.9907 | 210,352.6527 | 720 | met | yes | owner remains king | `5DUuFhF…16k2GU` |
+| 73 | `5Dnkprj…K8pFhW` | `5Dnkprj…K8pFhW` | 940,168.5734 | 181,142.3851 | 720 | met | yes | owner remains king | `5Dnkprj…K8pFhW` |
+| 74 | `5Dnffft…bXGH7L` | `5Dnffft…bXGH7L` | 378,229.6092 | 270,983.4493 | 720 | met | yes | owner remains king | `5Dnffft…bXGH7L` |
+| 75 | `5G1Qj93…sQzs6g` | `5G1Qj93…sQzs6g` | 552,610.2123 | 270,705.978 | 720 | met | yes | owner remains king | `5G1Qj93…sQzs6g` |
+| 76 | `5Cw4E2t…6yu5cs` | `5Cw4E2t…6yu5cs` | 56,651.1485 | 53,478.3487 | 720 | met | no | not projected within 10y | — |
+| 77 | `5DqALXR…DdohsE` | `5DqALXR…DdohsE` | 369,577.9139 | 251,019.6567 | 720 | met | yes | owner remains king | `5DqALXR…DdohsE` |
 | 78 | `5Fk765B…yDWsuk` | `5Fk765B…yDWsuk` | 525.3312 | 49,203.5694 | 720 | not met | no | not projected within 10y | — |
-| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 292,725.8722 | 720 | met | yes | 0 | `5EWwdZB…6HSxoF` |
+| 79 | `5EWwdZB…6HSxoF` | `5EWwdZB…6HSxoF` | 1,355,085.8272 | 292,725.8722 | 720 | met | yes | owner remains king | `5EWwdZB…6HSxoF` |
 | 80 | `5HTwtyt…2N1Zo6` | `5HTwtyt…2N1Zo6` | 3,993.8813 | 157,088.0106 | 720 | not met | no | not projected within 10y | — |
 | 81 | `5F9uEDD…jcQfij` | `5H47sFL…n4wdDa` | 198,537.9631 | 164,080.0802 | 720 | met | yes | 0 | `5H47sFL…n4wdDa` |
 | 82 | `5GNyvcC…yhZHgW` | `5GNyvcC…yhZHgW` | 744.3143 | 38,203.3769 | 720 | not met | no | not projected within 10y | — |
 | 83 | `5EHGayL…ZH9Q5L` | `5EHGayL…ZH9Q5L` | 8,057.3409 | 210,165.9559 | 720 | not met | yes | not projected within 10y | — |
 | 84 | `5EjbqZD…kLpVAF` | `5EjbqZD…kLpVAF` | 660.4364 | 50,479.4578 | 720 | not met | no | not projected within 10y | — |
 | 85 | `5FR392L…Sgwxhb` | `5FR392L…Sgwxhb` | 143,874.4068 | 194,779.084 | 720 | not met | yes | not projected within 10y | — |
-| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | no | 0 | — |
-| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,807.7517 | 80,881.0635 | 720 | met | no | 0 | `5Do9743…7cQsN5` |
-| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 318,712.8957 | 720 | met | yes | 0 | `5HK4vbG…LPgXpY` |
+| 86 | `5F1N5GE…N3D2cc` | — | 0 | 0 | 0 | met | no | owner remains king | — |
+| 87 | `5Do9743…7cQsN5` | `5Do9743…7cQsN5` | 161,807.7517 | 80,881.0635 | 720 | met | no | not projected within 10y | — |
+| 88 | `5HK4vbG…LPgXpY` | `5HK4vbG…LPgXpY` | 862,645.5846 | 318,712.8957 | 720 | met | yes | owner remains king | `5HK4vbG…LPgXpY` |
 | 89 | `5FCN4P1…JBhBLd` | `5FCN4P1…JBhBLd` | 6,094.6321 | 197,576.2047 | 720 | not met | yes | not projected within 10y | — |
-| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 2,373.2124 | 720 | met | no | 0 | `5EKtGWq…piSTEE` |
-| 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,527.6935 | 53,890.9961 | 720 | met | no | 0 | `5FcCsoB…UCyfsw` |
+| 90 | `5EKtGWq…piSTEE` | `5EKtGWq…piSTEE` | 23,835.7418 | 2,373.2124 | 720 | met | no | not projected within 10y | — |
+| 91 | `5FcCsoB…UCyfsw` | `5FcCsoB…UCyfsw` | 73,527.6935 | 53,890.9961 | 720 | met | no | not projected within 10y | — |
 | 92 | `5FeHbWK…s4UJGc` | — | 0 | 16,477.239 | 720 | not met | no | not projected within 10y | — |
-| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.1824 | 208,374.7244 | 720 | met | yes | 0 | `5DAoDtM…DhfNNK` |
+| 93 | `5DAoDtM…DhfNNK` | `5DAoDtM…DhfNNK` | 398,285.1824 | 208,374.7244 | 720 | met | yes | owner remains king | `5DAoDtM…DhfNNK` |
 | 94 | `5EeKtCK…Ng6Dvj` | `5EeKtCK…Ng6Dvj` | 273.723 | 89,566.5698 | 720 | not met | no | not projected within 10y | — |
 | 95 | `5ExqqyE…k7n7HP` | `5ExqqyE…k7n7HP` | 9,024.9977 | 175,510.2202 | 720 | not met | yes | not projected within 10y | — |
-| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.7648 | 38,151.1651 | 720 | met | no | 0 | `5GpKXtt…jWMz8c` |
+| 96 | `5GpKXtt…jWMz8c` | `5GpKXtt…jWMz8c` | 149,657.7648 | 38,151.1651 | 720 | met | no | not projected within 10y | — |
 | 97 | `5EvHrbH…ZrBcxZ` | `5EvHrbH…ZrBcxZ` | 7,940.3318 | 61,957.2691 | 720 | not met | no | not projected within 10y | — |
-| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,399.061 | 153,478.4954 | 720 | met | yes | 0 | `5HWVxik…BtFxvK` |
+| 98 | `5HWVxik…BtFxvK` | `5HWVxik…BtFxvK` | 588,399.061 | 153,478.4954 | 720 | met | yes | owner remains king | `5HWVxik…BtFxvK` |
 | 99 | `5FWbrcG…MwSeGD` | — | 0 | 14,553.6728 | 720 | not met | no | not projected within 10y | — |
-| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,263.4369 | 113,125.0907 | 720 | met | no | 0 | `5HdSGJg…xTvKfe` |
+| 100 | `5HdSGJg…xTvKfe` | `5HdSGJg…xTvKfe` | 328,263.4369 | 113,125.0907 | 720 | met | no | owner remains king | `5HdSGJg…xTvKfe` |
 | 101 | `5H6Dezn…UAS2Zj` | `5H6Dezn…UAS2Zj` | 13,574.6134 | 134,785.3538 | 720 | not met | yes | not projected within 10y | — |
 | 102 | `5EEinUE…EqKkC9` | `5EEinUE…EqKkC9` | 2,002.3405 | 56,607.1601 | 720 | not met | no | not projected within 10y | — |
-| 103 | `5E529AK…8SbwGV` | — | 0 | 0 | 720 | met | no | 0 | — |
+| 103 | `5E529AK…8SbwGV` | — | 0 | 0 | 720 | met | no | not projected within 10y | — |
 | 104 | `5Coeuhi…kWYG6y` | `5Coeuhi…kWYG6y` | 3,017.9211 | 271,396.0946 | 720 | not met | yes | not projected within 10y | — |
-| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,541.6292 | 127,443.1401 | 720 | met | no | 0 | `5HBSExJ…DHHTY4` |
-| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,896.8966 | 148,508.2379 | 720 | met | yes | 0 | `5D7FVSM…ezvyHy` |
+| 105 | `5HBSExJ…DHHTY4` | `5HBSExJ…DHHTY4` | 200,541.6292 | 127,443.1401 | 720 | met | no | not projected within 10y | — |
+| 106 | `5D7FVSM…ezvyHy` | `5D7FVSM…ezvyHy` | 272,896.8966 | 148,508.2379 | 720 | met | yes | owner remains king | `5D7FVSM…ezvyHy` |
 | 107 | `5E4WJ2t…mUT3Ju` | `5E4WJ2t…mUT3Ju` | 41,164.694 | 76,343.3581 | 720 | not met | no | not projected within 10y | — |
-| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,527.0139 | 104,888.0634 | 720 | met | no | 0 | `5CAxp9f…j7oTWh` |
-| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3346 | 71,198.5627 | 720 | met | no | 0 | `5DyQkk4…Vd3XUk` |
+| 108 | `5CAxp9f…j7oTWh` | `5CAxp9f…j7oTWh` | 319,527.0139 | 104,888.0634 | 720 | met | no | not projected within 10y | — |
+| 109 | `5DyQkk4…Vd3XUk` | `5DyQkk4…Vd3XUk` | 159,573.3346 | 71,198.5627 | 720 | met | no | not projected within 10y | — |
 | 110 | `5CwckYm…2Q9rvp` | `5CwckYm…2Q9rvp` | 9,205.9219 | 172,475.8365 | 720 | not met | yes | not projected within 10y | — |
 | 111 | `5ExhNF8…NRmaN5` | `5ExhNF8…NRmaN5` | 1,221.605 | 241,802.5643 | 720 | not met | yes | not projected within 10y | — |
 | 112 | `5E1ohAs…2jFvCt` | `5E1ohAs…2jFvCt` | 9,192.0168 | 85,441.7213 | 720 | not met | yes | not projected within 10y | — |
-| 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,417.1757 | 71,955.6775 | 720 | met | no | 0 | `5FRumLA…C3M8uB` |
-| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 81,438.0132 | 720 | met | no | 0 | `5H1nRfb…KpUKju` |
+| 113 | `5FRumLA…C3M8uB` | `5FRumLA…C3M8uB` | 81,417.1757 | 71,955.6775 | 720 | met | no | not projected within 10y | — |
+| 114 | `5H1nRfb…KpUKju` | `5H1nRfb…KpUKju` | 146,039.7603 | 81,438.0132 | 720 | met | no | not projected within 10y | — |
 | 115 | `5EhTo9A…GZKgTV` | `5EhTo9A…GZKgTV` | 2,942.0083 | 67,000.9404 | 720 | not met | yes | not projected within 10y | — |
 | 116 | `5CXN6pP…ENsub5` | `5CXN6pP…ENsub5` | 30.4505 | 32,209.8407 | 720 | not met | no | not projected within 10y | — |
-| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,681.2071 | 117,793.0953 | 720 | met | yes | 0 | `5DwRMxJ…RozmGE` |
+| 117 | `5DwRMxJ…RozmGE` | `5DwRMxJ…RozmGE` | 161,681.2071 | 117,793.0953 | 720 | met | yes | owner remains king | `5DwRMxJ…RozmGE` |
 | 118 | `5HmP973…7FsmZz` | `5HmP973…7FsmZz` | 118,220.7878 | 160,562.5863 | 720 | not met | yes | not projected within 10y | — |
 | 119 | `5HMwvi1…75JNd4` | `5HMwvi1…75JNd4` | 20,722.5426 | 71,680.9632 | 720 | not met | yes | not projected within 10y | — |
 | 120 | `5HmYnmU…1Qqzb8` | `5HmYnmU…1Qqzb8` | 72,233.2618 | 220,031.3243 | 720 | not met | yes | not projected within 10y | — |
-| 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 153,231.7778 | 720 | met | yes | 0 | `5EL9y2g…34ZdNf` |
-| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,468.8067 | 20,737.6493 | 720 | met | no | 0 | `5CfPqfa…dnJyYB` |
-| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 154,290.8223 | 720 | met | yes | 0 | `5GxsywP…Nba82o` |
-| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 221,108.4659 | 720 | met | yes | 0 | `5GZPtUj…AEDjmt` |
+| 121 | `5EL9y2g…34ZdNf` | `5EL9y2g…34ZdNf` | 202,885.7096 | 153,231.7778 | 720 | met | yes | owner remains king | `5EL9y2g…34ZdNf` |
+| 122 | `5CfPqfa…dnJyYB` | `5CfPqfa…dnJyYB` | 100,468.8067 | 20,737.6493 | 720 | met | no | not projected within 10y | — |
+| 123 | `5GxsywP…Nba82o` | `5GxsywP…Nba82o` | 350,656.8799 | 154,290.8223 | 720 | met | yes | owner remains king | `5GxsywP…Nba82o` |
+| 124 | `5GZPtUj…AEDjmt` | `5GZPtUj…AEDjmt` | 1,000,000.1108 | 221,108.4659 | 720 | met | yes | owner remains king | `5GZPtUj…AEDjmt` |
 | 125 | `5CFFoku…Kuydnx` | `5CFFoku…Kuydnx` | 45,923.6629 | 110,670.7881 | 720 | not met | yes | not projected within 10y | — |
-| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,565.005 | 50,234.5637 | 720 | met | no | 0 | `5FZD47W…AJ5ggD` |
+| 126 | `5DqrUa2…GqvKZm` | `5FZD47W…AJ5ggD` | 122,565.005 | 50,234.5637 | 720 | met | no | not projected within 10y | — |
 | 127 | `5EKrpcq…58gtb5` | `5EKrpcq…58gtb5` | 5,535.6746 | 165,027.492 | 720 | not met | yes | not projected within 10y | — |
 | 128 | `5FpsgU3…Ewt9h8` | `5FpsgU3…Ewt9h8` | 3,774.5742 | 245,606.6709 | 720 | not met | yes | not projected within 10y | — |
 
