@@ -11,12 +11,12 @@ The saved test reproduced the proposed route against a mainnet clone on runtime 
 | Stage | Observed result |
 |---|---:|
 | Starting root stake | 98 TAO |
-| Effective stake while all 98 TAO remained on root | 17.64 |
+| Effective alpha while all 98 TAO remained on root | 17.64 alpha |
 | Plaintext weight submission at that point | Rejected: `NotEnoughStakeToSetWeights` |
 | Root stake moved to SN50 | 6 TAO |
 | Root stake remaining | 92 TAO |
 | SN50 alpha received | 1,176.376139329 alpha |
-| Effective stake after the move | 1,192.936139328 |
+| Effective alpha after the move | 1,192.936139328 alpha |
 | SN50 validator permit after an epoch | Yes |
 | Targets in the uniform vector | All 255 registered non-self UIDs |
 | Validator trust after the earning epoch | 46,133 raw u16 |
@@ -24,15 +24,15 @@ The saved test reproduced the proposed route against a mainnet clone on runtime 
 | Root alpha generated | 659 alpha rao |
 | Pending root-basket deposit | 1,977 alpha rao |
 
-The effective-stake calculation at the tested state was:
+The effective-alpha calculation at the tested state was:
 
 ```text
 SN50 alpha + (root TAO × TAO weight)
 = 1,176.376139329 + (92 × 0.18)
-= 1,192.936139328 effective stake
+= 1,192.936139328 effective alpha
 ```
 
-The threshold was 1,000. Keeping all 98 TAO on root yielded only `98 × 0.18 = 17.64`, so registration alone was not sufficient.
+The threshold was **1,000 alpha**, not 1,000 TAO. `TaoWeight` converts the root TAO contribution into alpha-equivalent stake before it is added to the validator's local SN50 alpha. Keeping all 98 TAO on root therefore yielded only `98 × 0.18 = 17.64 alpha`, so registration alone was not sufficient.
 
 SN50 was full at 256/256 neurons. Immediately before the final run, it had 236 consensus-positive and incentive-positive UIDs, 9 of 64 validator permits in use, a 65,535-block immunity period, commit-reveal disabled, `weights_version = 100`, a 360-block tempo, and a 100-block weight-setting rate limit. The original research measured 235 positive UIDs and 8 permits at [block 8,865,711](https://bittensor.ai/explorer/block/8865711); the small differences are consistent with state changing between observations.
 
@@ -42,7 +42,7 @@ One terminology correction matters: the new validator's own `consensus` and `inc
 
 - The operator needs free TAO for SN50's floating registration burn and transaction fees. The 98 TAO already staked on root cannot pay the burn unless some is first unstaked. The clone's pristine snapshot showed a burn of about 0.8 TAO, but repeated clone registrations moved it higher; query the live cost.
 - Moving 6 TAO out of root leaves only 92 TAO on root. Check the lowest root stake and the hotkey's pruning position first. Do not proceed if reducing root stake creates unacceptable root deregistration risk.
-- Six TAO was enough at the tested pool price. It is not a permanent constant. The received alpha depends on the live SN50 pool price, fees, and slippage. Require a safety margin above 1,000 effective stake.
+- Six TAO was enough at the tested pool price. It is not a permanent constant. The received alpha depends on the live SN50 pool price, fees, and slippage. Require a safety margin above the 1,000-alpha threshold.
 - A recently modified root position may be temporarily locked. If `stake move` returns `RootStakeLocked`, wait for the root stake unlock interval; do not work around the protection.
 - SN50 is full. Registration prunes a neuron and gives the replacement immunity for 65,535 blocks, approximately 9.1 days at 12 seconds per block. After immunity, positive emission improves survival but does not guarantee it.
 - A uniform vector is a generic experiment, not subnet-specific validation. It can earn a small dividend while consensus is dense, but future consensus or subnet policy may make it ineffective.
@@ -98,7 +98,7 @@ Continue only if all of these remain true:
 - the weights version is still 100, or the command below is updated to the new live version;
 - the same hotkey still has enough root pruning margin after reducing root stake from 98 to about 92 TAO.
 
-Record the live stake threshold and TAO weight as well. The following calculations assume the tested values of 1,000 and 0.18 respectively.
+Record the live effective-alpha threshold and TAO weight as well. The following calculations assume the tested values of 1,000 alpha and 0.18 alpha per root TAO respectively.
 
 ## 3. Register the existing root hotkey on SN50
 
@@ -168,7 +168,7 @@ btcli stake move \
 
 Save the finalized extrinsic hash.
 
-## 5. Verify effective stake before setting weights
+## 5. Verify effective alpha before setting weights
 
 Read both positions:
 
@@ -191,10 +191,10 @@ btcli stake show \
 Calculate:
 
 ```text
-effective stake = SN50 alpha + (remaining root TAO × current TAO weight)
+effective alpha = SN50 alpha + (remaining root TAO × current TAO weight in alpha per TAO)
 ```
 
-Do not set weights unless the result is above the live stake threshold with a useful safety margin. In the clone, 6 TAO produced about 1,176.38 SN50 alpha and left 92 TAO on root, giving about 1,192.94 effective stake—a 19.3% margin.
+Do not set weights unless the result is above the live alpha-denominated threshold with a useful safety margin. In the clone, 6 TAO produced about 1,176.38 SN50 alpha and left 92 TAO on root, giving about 1,192.94 effective alpha—a 19.3% margin above the 1,000-alpha threshold.
 
 If the result is below the threshold, do not keep retrying the weight transaction. Recheck the live pool calculation and decide whether the extra exposure and root-pruning risk of moving a little more stake is acceptable.
 
@@ -307,4 +307,4 @@ Do not report failure solely because this command initially returns no positions
 
 The SN50 research is experimentally supported for its narrow objective: a self-funded root validator starting with 98 TAO can obtain positive validator/root dividends without subnet-specific scoring by moving roughly 6 TAO from root into SN50 alpha and uniformly weighting the registered non-self neurons.
 
-It is not correct to say that registration alone, or 98 TAO left entirely on root, meets the 1,000 effective-stake threshold. It is also not necessary for the new validator's own consensus score to become positive. The proven mechanism is consensus overlap in its outgoing weights, producing positive validator trust, validator dividends, and then root alpha.
+It is not correct to say that registration alone, or 98 TAO left entirely on root, meets the 1,000-alpha effective-stake threshold. Root TAO contributes only after conversion by `TaoWeight`; at the tested value, 98 TAO contributed 17.64 effective alpha. It is also not necessary for the new validator's own consensus score to become positive. The proven mechanism is consensus overlap in its outgoing weights, producing positive validator trust, validator dividends, and then root alpha.
