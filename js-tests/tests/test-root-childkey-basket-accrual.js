@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { randomInt } from "node:crypto";
 
 import { Keyring } from "@polkadot/api";
 import { u8aToHex } from "@polkadot/util";
@@ -9,15 +8,16 @@ import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUN_ID = process.env.ROOT_CHILDKEY_RUN_ID ?? `run${Date.now()}p${process.pid}`;
-const NETUID = 1;
+const NETUID = Number(process.env.CHILD_NETUID ?? 107);
 const ROOT_NETUID = 0;
 const RAO_PER_TAO = 1_000_000_000n;
-const ROOT_STAKE = 1_100n * RAO_PER_TAO;
-const TEST_BALANCE = 2_000n * RAO_PER_TAO;
+const MAX_ROOT_STAKE = 10_000n * RAO_PER_TAO;
+const ROOT_STAKE = BigInt(process.env.ROOT_STAKE_TAO ?? "10000") * RAO_PER_TAO;
+const TEST_BALANCE = ROOT_STAKE + 1_000n * RAO_PER_TAO;
 const U64_MAX = 18_446_744_073_709_551_615n;
 const FAST_TEMPO = 1;
 const MAX_ACTIVATION_BLOCKS = Number(process.env.MAX_ACTIVATION_BLOCKS ?? 20);
-const MAX_ACCRUAL_BLOCKS = Number(process.env.MAX_ACCRUAL_BLOCKS ?? 100);
+const MAX_ACCRUAL_BLOCKS = Number(process.env.MAX_ACCRUAL_BLOCKS ?? 200);
 const TX_TIMEOUT_MS = Number(process.env.TX_TIMEOUT_MS ?? 180_000);
 
 const keyring = new Keyring({ type: "sr25519" });
@@ -52,6 +52,9 @@ async function main() {
     console.log("root coldkey:", rootColdkey.address);
     console.log("root hotkey:", rootHotkey.address);
 
+    assert.ok(ROOT_STAKE > 0n, "root stake must be positive");
+    assert.ok(ROOT_STAKE <= MAX_ROOT_STAKE, "root stake exceeds the 10000 TAO experiment limit");
+
     assertMetadataAvailable();
     await assertAliceIsSudo();
     await assertBasketMigrationComplete();
@@ -64,9 +67,9 @@ async function main() {
       `pending_childkey_cooldown=${originalChildkeyCooldown}`
     );
 
-    const selectedChild = await selectRandomActiveValidator();
+    const selectedChild = await selectHighestDividendValidator();
     console.log(
-      "selected subnet 1 validator:",
+      `selected subnet ${NETUID} validator:`,
       `uid=${selectedChild.uid}`,
       `hotkey=${selectedChild.hotkey}`,
       `dividends=${selectedChild.dividends}`
@@ -81,7 +84,7 @@ async function main() {
     await submitAndWait(
       rootColdkey,
       api.tx.subtensorModule.addStakeLimit(rootHotkey.address, ROOT_NETUID, ROOT_STAKE, U64_MAX, false),
-      "stake 1100 TAO on root hotkey"
+      `stake ${ROOT_STAKE / RAO_PER_TAO} TAO on root hotkey`
     );
 
     const rootUid = (await api.query.subtensorModule.uids(ROOT_NETUID, rootHotkey.address)).unwrap().toNumber();
@@ -89,7 +92,17 @@ async function main() {
       await api.query.subtensorModule.totalHotkeyAlpha(rootHotkey.address, ROOT_NETUID)
     ).toBigInt();
     console.log("root validator registered:", `uid=${rootUid}`, `stake_rao=${actualRootStake}`);
-    assert.equal(actualRootStake, ROOT_STAKE, "new root validator does not have exactly 1100 TAO stake");
+    assert.equal(actualRootStake, ROOT_STAKE, "new root validator does not have the requested root stake");
+    assert.equal(
+      (await api.query.subtensorModule.isNetworkMember(rootHotkey.address, ROOT_NETUID)).isTrue,
+      true,
+      "new validator is not registered on root"
+    );
+    assert.equal(
+      (await api.query.subtensorModule.isNetworkMember(rootHotkey.address, NETUID)).isTrue,
+      false,
+      `new root validator unexpectedly registered on subnet ${NETUID}`
+    );
 
     const beforeAssignment = await readBasketRuntimeState();
     console.log("basket before child assignment:", formatBasketState(beforeAssignment));
@@ -101,7 +114,7 @@ async function main() {
     await submitAndWait(
       rootColdkey,
       api.tx.subtensorModule.setChildren(rootHotkey.address, NETUID, [[U64_MAX, selectedChild.hotkey]]),
-      "assign all root stake to subnet 1 childkey"
+      `assign all root stake to subnet ${NETUID} childkey`
     );
     console.log("childkey scheduled:", `proportion=${U64_MAX}`, `child=${selectedChild.hotkey}`);
 
@@ -143,6 +156,8 @@ async function main() {
     assert.ok(rootPosition, "get_root_basket_positions omitted the new root validator hotkey");
     assert.ok(rootPosition.shares > 0n, "new root validator basket position has zero owed shares");
     assert.ok(rootPosition.payout > 0n, "new root validator basket position has zero payout");
+    assert.ok(accrued.rootDividend > 0n, `root validator has no recorded subnet ${NETUID} root dividend`);
+    assert.ok(accrued.basketShares > 0n, "root validator has no basket shares after accrual");
     assert.equal(
       accrued.owed,
       accrued.positions.reduce((sum, position) => sum + position.payout, 0n),
@@ -187,6 +202,10 @@ function assertMetadataAvailable() {
     ["SubtensorModule.Keys", api.query.subtensorModule?.keys],
     ["SubtensorModule.Uids", api.query.subtensorModule?.uids],
     ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
+    ["SubtensorModule.IsNetworkMember", api.query.subtensorModule?.isNetworkMember],
+    ["SubtensorModule.RootAlphaDividendsPerSubnet", api.query.subtensorModule?.rootAlphaDividendsPerSubnet],
+    ["SubtensorModule.PendingBasketDeposits", api.query.subtensorModule?.pendingBasketDeposits],
+    ["SubtensorModule.BasketShares", api.query.subtensorModule?.basketShares],
     ["raw RPC provider", api._rpcCore?.provider],
   ].filter(([, value]) => !value);
 
@@ -205,7 +224,7 @@ async function assertBasketMigrationComplete() {
   console.log("basket migration complete: migrate_seed_beta_basket_v2=true");
 }
 
-async function selectRandomActiveValidator() {
+async function selectHighestDividendValidator() {
   const [permits, dividends] = await Promise.all([
     api.query.subtensorModule.validatorPermit(NETUID),
     api.query.subtensorModule.dividends(NETUID),
@@ -218,9 +237,14 @@ async function selectRandomActiveValidator() {
     candidates.push({ uid, hotkey, dividends: dividends[uid].toBigInt() });
   }
 
-  assert.ok(candidates.length > 0, "subnet 1 has no active validator-permit hotkeys with dividends");
-  console.log("eligible subnet 1 validators:", candidates.length);
-  return candidates[randomInt(candidates.length)];
+  assert.ok(candidates.length > 0, `subnet ${NETUID} has no active validator-permit hotkeys with dividends`);
+  console.log(`eligible subnet ${NETUID} validators:`, candidates.length);
+  candidates.sort((left, right) => {
+    if (left.dividends > right.dividends) return -1;
+    if (left.dividends < right.dividends) return 1;
+    return left.uid - right.uid;
+  });
+  return candidates[0];
 }
 
 async function fund(address, amount) {
@@ -247,7 +271,7 @@ async function setSubnetTempo(tempo) {
         [api.query.subtensorModule.tempo.key(NETUID), storageValueHex("u16", tempo)],
       ])
     ),
-    `set subnet 1 tempo to ${tempo}`
+    `set subnet ${NETUID} tempo to ${tempo}`
   );
 }
 
@@ -257,7 +281,7 @@ async function restoreSubnetSettings() {
   try {
     if (tempoChanged && originalTempo !== undefined) {
       await setSubnetTempo(originalTempo);
-      console.log("restored subnet 1 tempo:", originalTempo);
+      console.log(`restored subnet ${NETUID} tempo:`, originalTempo);
     }
     if (cooldownChanged && originalChildkeyCooldown !== undefined) {
       await setChildkeyCooldown(originalChildkeyCooldown);
@@ -299,7 +323,7 @@ async function waitForNextEpoch(previousEpoch, maxBlocks) {
       return { block: header.number.toNumber(), epochIndex };
     }
   }
-  throw new Error(`subnet 1 epoch did not advance within ${maxBlocks} finalized blocks`);
+  throw new Error(`subnet ${NETUID} epoch did not advance within ${maxBlocks} finalized blocks`);
 }
 
 async function waitForBasketAccrual(previousOwed, expectedHotkey, earningEpochIndex) {
@@ -347,11 +371,22 @@ async function readBasketRuntimeState() {
   const header = await api.rpc.chain.getHeader();
   const blockHash = header.hash.toHex();
   const argument = api.createType("AccountId32", rootColdkey.address).toHex();
-  const [owedRaw, positionsRaw, rpcOwedRaw, rpcPositionsRaw] = await Promise.all([
+  const [
+    owedRaw,
+    positionsRaw,
+    rpcOwedRaw,
+    rpcPositionsRaw,
+    rootDividend,
+    pendingDeposit,
+    basketShares,
+  ] = await Promise.all([
     api.rpc.state.call("BetaBasketRuntimeApi_get_root_basket_owed", argument, blockHash),
     api.rpc.state.call("BetaBasketRuntimeApi_get_root_basket_positions", argument, blockHash),
     api._rpcCore.provider.send("betaBasket_getStakerOwed", [rootColdkey.address, blockHash]),
     api._rpcCore.provider.send("betaBasket_getStakerPositions", [rootColdkey.address, blockHash]),
+    api.query.subtensorModule.rootAlphaDividendsPerSubnet.at(blockHash, NETUID, rootHotkey.address),
+    api.query.subtensorModule.pendingBasketDeposits.at(blockHash, rootHotkey.address, NETUID),
+    api.query.subtensorModule.basketShares.at(blockHash, rootHotkey.address),
   ]);
 
   return {
@@ -361,6 +396,9 @@ async function readBasketRuntimeState() {
     positions: decodePositions(positionsRaw),
     rpcOwed: decodeRpcU64(rpcOwedRaw),
     rpcPositions: decodePositions(rpcBytes(rpcPositionsRaw)),
+    rootDividend: rootDividend.toBigInt(),
+    pendingDeposit: pendingDeposit.toBigInt(),
+    basketShares: basketShares.toBigInt(),
   };
 }
 
@@ -399,6 +437,9 @@ function formatBasketState(state) {
     `positions=[${positions}]`,
     `rpc_owed_rao=${state.rpcOwed}`,
     `rpc_positions=${state.rpcPositions.length}`,
+    `root_dividend_alpha_rao=${state.rootDividend}`,
+    `pending_alpha_rao=${state.pendingDeposit}`,
+    `basket_shares=${state.basketShares}`,
   ].join(" ");
 }
 
