@@ -2,7 +2,9 @@
 
 ## Objective
 
-Find the newest historical runtime whose epoch execution produces an alpha-accounting drift materially larger than the noise measured on corrected runtime 447. Runtime 446's accounting repair must be excluded as a cause: every candidate receives the ongoing burned-alpha accounting fix, while the already-corrected runtime-447 snapshot supplies the data and no accounting migration is rerun.
+Find the historical runtime transition that explains the **current** 1–2% alpha-accounting discrepancy, including its sign, magnitude, and per-subnet distribution. A historical candidate is not sufficient merely because the current-runtime formula reports accelerated drift: each candidate must first be evaluated with the accounting liabilities that existed in that runtime.
+
+Runtime 446's accounting repair remains excluded as a cause: every candidate receives the ongoing burned-alpha accounting fix, while the already-corrected runtime-447 snapshot supplies the data and no accounting migration is rerun.
 
 The accounting invariant is evaluated per active alpha subnet:
 
@@ -17,6 +19,22 @@ calculated = SubnetAlphaOut - AlphaBurned - pending - SubnetProtocolAlpha
 discrepancy = actual - calculated
 ```
 
+For historical runtimes, extend `pending` with every issued-but-not-yet-staked liability represented by that runtime. In runtime 440 this includes the exact outstanding legacy root entitlement:
+
+```text
+legacy_root_owed = sum_hotkey,coldkey(
+    max(0,
+        RootClaimable[hotkey][netuid] * root_stake(hotkey, coldkey)
+        - RootClaimed[netuid][hotkey][coldkey]
+    )
+)
+
+historical_calculated = calculated - legacy_root_owed
+historical_discrepancy = actual - historical_calculated
+```
+
+The fixed-current-runtime formula remains useful for detecting a semantic boundary, but its signal must not be classified as an accounting defect until version-specific liabilities have been included.
+
 Root (netuid 0) is included in network and epoch checks but excluded from this alpha-subnet formula.
 
 ## Known controls
@@ -26,6 +44,9 @@ Root (netuid 0) is included in network and epoch checks but excluded from this a
 - Corrected long-run maximum after runtime 446: `0.000868309 alpha` over 29,628 blocks, equivalent to `0.000021101 alpha` per 720 blocks (`0.964x` the two-tempo maximum).
 - Runtime 446 first appeared in post-state at block 8,843,319. The three accounting migrations were complete by block 8,843,324.
 - The [PR #1321 root-dividend fix](https://github.com/RaoFoundation/subtensor/pull/1321) changes alpha dividends from the full validator dividend to `dividend - root_divs`. The PR was closed without merge, but the same source patch is present in git commit `956263fbb8994386bf209d307b062955ce42d83a` (`sub out root divs to get alpha divs`). Mainnet block 4,962,968 is the supplied live-fix boundary and must be verified against chain runtime history before using it to map candidates.
+- The first pass found a large fixed-formula signal in runtime 440 and no signal in runtime 441. Runtime 440 keeps issued root dividends in `RootClaimable`/`RootClaimed` until claim, whereas runtime 441 Root Reborn replaces that path with deferred/pending beta-basket accounting.
+- Reconstructing runtime 440's legacy owed ledger explained more than 99.98% of the apparent movement. Therefore runtime 440 is currently a **version-specific accounting false positive**, not a proven explanation of today's discrepancy.
+- Runtime 441 first appeared in mainnet post-state at block 8,765,683; the exact pre/post hashes and migration-completion interval must be reverified during the audit rather than assumed from the existing map.
 
 These values form the control envelope. Raw movement over a longer run is not sufficient evidence; every result must also be normalized to 720 blocks and compared with the control per subnet and with the global `0.000021877 alpha` maximum.
 
@@ -117,13 +138,14 @@ Abort the iteration as invalid if a historical migration ran, the accounting sta
 
 ## Phase 5: observe epoch drift
 
-1. Accelerate local block production without changing tempo, emission, stake, burn, or accounting storage. Record the acceleration method and prove state-transition order is unchanged.
-2. Detect successful epochs from the strongest marker available in that candidate:
+1. Before measuring drift, inventory the candidate's complete set of issued-but-not-staked liabilities and define the version-correct accounting formula. Do not assume the runtime-447 pending fields are exhaustive.
+2. Accelerate local block production without changing tempo, emission, stake, burn, or accounting storage. Record the acceleration method and prove state-transition order is unchanged.
+3. Detect successful epochs from the strongest marker available in that candidate:
    - prefer `SubnetEpochIndex` increments;
    - otherwise use `LastEpochBlock`/the historical epoch marker and verify the corresponding emission distribution state change.
-3. Continue until every active alpha subnet has executed at least one epoch after the candidate baseline. Current state includes non-uniform tempos, so do not assume that 360 blocks covers every subnet.
-4. Capture exact pre-epoch and post-epoch accounting snapshots where practical, plus one aggregate snapshot after all subnets have crossed an epoch.
-5. For every subnet calculate:
+4. Continue until every active alpha subnet has executed at least one epoch after the candidate baseline. Current state includes non-uniform tempos, so do not assume that 360 blocks covers every subnet.
+5. Capture exact pre-epoch and post-epoch accounting snapshots where practical, plus one aggregate snapshot after all subnets have crossed an epoch.
+6. For every subnet calculate both the fixed-current-runtime discrepancy and the version-correct discrepancy, including:
    - signed and absolute discrepancy before and after;
    - discrepancy movement in rao and alpha;
    - movement per executed epoch;
@@ -131,21 +153,65 @@ Abort the iteration as invalid if a historical migration ran, the accounting sta
    - ratio to that subnet's runtime-447 control movement;
    - ratio to the global `0.000021877 alpha` two-tempo maximum;
    - component deltas for actual stake, calculated stake, `SubnetAlphaOut`, `AlphaBurned`, pending alpha, and protocol alpha.
-6. Separate the upgrade-block movement, ordinary non-epoch per-block drift, extrinsic-driven movement, and the epoch step. A candidate is not implicated merely because its raw discrepancy is larger after many blocks.
+   - deltas of every version-specific liability, including exact legacy root owed where present.
+7. Separate the upgrade-block movement, ordinary non-epoch per-block drift, extrinsic-driven movement, and the epoch step. A candidate is not implicated merely because its raw discrepancy is larger after many blocks.
+
+For runtime 440, calculate legacy root owed per `(hotkey, coldkey, netuid)` using the historical runtime's fixed-point operations, saturation, floor/rounding, and negative-to-zero behavior. Do not approximate it as `rate × TotalHotkeyAlpha - sum(RootClaimed)`: per-position rounding and clipping can leave a millialpha residual that is still far above the rao-scale control threshold.
+
+## Phase 6: audit the runtime-441 Root Reborn migration
+
+This audit is mandatory before continuing below runtime 440 or attributing today's discrepancy to Root Reborn.
+
+1. Reverify the exact last runtime-440 block and first runtime-441 block on mainnet, including hashes, runtime code hashes, and whether an epoch or relevant extrinsic executed in either block.
+2. Read all 128 alpha subnets at the exact adjacent pre/post hashes. Capture:
+   - the standard accounting components;
+   - every `RootClaimable` rate and `RootClaimed` watermark;
+   - every root-stake position needed to calculate exact pre-upgrade owed alpha;
+   - Root Reborn migration markers/cursors and storage versions;
+   - beta-basket holdings, shares, rates, NAV/accounting totals, escrow stake, `DeferredRootAlphaDividends`, and `PendingBasketDeposits` after activation.
+3. Calculate exact legacy owed alpha immediately before activation for every `(hotkey, coldkey, netuid)`, then aggregate it by subnet, validator hotkey, and beneficiary coldkey.
+4. Determine every destination used by the Root Reborn seed migration. For each subnet, reconcile:
+
+```text
+legacy liability removed
+    = basket assets/stake created
+    + deferred root dividends created
+    + pending basket deposits created
+    + claims materialized during the boundary
+    + alpha explicitly recycled or burned
+    + legacy liability retained after the boundary
+    + conversion_error
+```
+
+5. If the migration spans multiple blocks, keep the adjacent activation comparison but also follow every migration cursor to the first block where seeding is complete. Separate migration writes from normal block issuance, epochs, basket flushes, claims, and extrinsics at every step.
+6. Use exact runtime arithmetic and storage semantics. Reconcile both alpha units and economic ownership: a validator-basket asset and a staker's basket entitlement must not be counted twice.
+7. Compare signed `conversion_error` with the current discrepancy at a recent reference block:
+   - same sign per subnet;
+   - similar per-subnet distribution;
+   - magnitude sufficient to explain the current 1–2%;
+   - aggregate error conserved against issuance, burn, protocol, pending, and stake totals.
+8. Reproduce the migration audit locally from a snapshot immediately before runtime 441 when possible. Upgrade with the original runtime-441 migration enabled, then run the final saved audit test end-to-end.
+
+Classify the Root Reborn audit as follows:
+
+- **Explains current discrepancy:** a concrete migration conversion error has the same sign and approximately the same per-subnet magnitude/distribution as today's residual. Stop the historical descent, reproduce it, and report the exact migration operation that lost, duplicated, or misclassified alpha.
+- **Conserves correctly:** legacy owed is fully represented in the new basket/deferred/pending/recycled destinations within exact arithmetic and rounding bounds. Mark runtime 440's original signal as a formula false positive and continue below runtime 440.
+- **Inconclusive:** missing historical state or mixed epoch/extrinsic activity prevents conservation proof. Expand the block window, replay locally, or add storage-level reconstruction; do not declare Root Reborn causal and do not silently skip the boundary.
 
 ## Decision rule
 
 Classify an iteration as follows:
 
-- **No acceleration:** the 720-block-normalized movement remains within the runtime-447 control envelope and no repeatable epoch step appears. Restore the pristine clone and test the next lower deployed runtime.
-- **Borderline/elevated:** normalized movement exceeds the per-subnet control but is less than `100x` the corrected control, or the movement cannot be isolated from another transition. Run at least one additional epoch and repeat from a fresh clone before deciding. Do not discard these results; a state-dependent or partial defect may be smaller than the linear estimate.
-- **Root-cause candidate found:** an epoch produces a deterministic accounting step that is at least `100x` the corrected control after normalization, has matching component evidence, and reproduces from the pristine snapshot. Stop descending, preserve all artifacts, and report the candidate version and exact source diff. A result at or above `1,000x` is exceptionally strong evidence, but `1,000x` is not required to stop.
+- **Formula/semantic false positive:** the fixed-current-runtime formula crosses the threshold, but a liability or ownership category native to that historical runtime explains the movement. Correct the formula, retain the result as a semantic boundary, and apply the decision rule again to the version-correct discrepancy. Runtime 440 currently has this classification.
+- **No acceleration:** the version-correct 720-block-normalized movement remains within the runtime-447 control envelope and no repeatable epoch step appears. Restore the pristine clone and test the next lower deployed runtime.
+- **Borderline/elevated:** version-correct normalized movement exceeds the per-subnet control but is less than `100x` the corrected control, or the movement cannot be isolated from another transition. Run at least one additional epoch and repeat from a fresh clone before deciding. Do not discard these results; a state-dependent or partial defect may be smaller than the linear estimate.
+- **Root-cause candidate found:** an epoch produces a deterministic step in the **version-correct** accounting discrepancy that is at least `100x` the corrected control after normalization, has matching conservation/component evidence, plausibly matches the current discrepancy's sign and distribution, and reproduces from the pristine snapshot. Stop descending, preserve all artifacts, and report the candidate version and exact source diff. A result at or above `1,000x` is exceptionally strong evidence, but `1,000x` is not required to stop.
 
 The `100x` threshold is a search/stopping threshold, not an accounting tolerance. It remains far below the approximately `37,500x` signal predicted by the simple 2,000,000-to-30,000-block scaling argument. All non-zero rao differences remain in the tables. If a clearly structural error moves substantial alpha but does not fit the numerical threshold, stop and report it with the evidence rather than continuing blindly.
 
 ## Descending search loop
 
-For candidate versions `445, 444, 443, ...`:
+The completed first pass covered runtime 445 down through runtime 440 and found runtime 440's legacy-root-liability false positive. Run Phase 6 next. If the Root Reborn audit does not explain today's discrepancy, resume with runtime 439 and continue downward:
 
 1. Restore the identical runtime-447 base state.
 2. Prepare the historical candidate as local spec 448.
@@ -153,12 +219,13 @@ For candidate versions `445, 444, 443, ...`:
 4. Prove no migrations will run.
 5. Build, upgrade, smoke-test, and capture the post-upgrade baseline.
 6. Run through at least one verified epoch per active alpha subnet.
-7. Calculate and normalize drift.
+7. Calculate and normalize both fixed-formula and version-correct drift.
 8. Apply the decision rule.
 9. If there is no acceleration, stop/clean the node, archive the iteration report, and continue to the next lower deployed runtime.
-10. If a root-cause candidate is found, stop the search immediately after reproduction and report.
+10. If a fixed-formula signal is explained by a historical liability, record it as a false positive and continue after any mandatory transition audit.
+11. If a version-correct root-cause candidate is found, stop the search immediately after reproduction and report.
 
-Do not continue below a found candidate until the boundary is confirmed. After a positive result at version `N`, test `N+1` from the pristine base if it was not already tested successfully; this establishes the narrow transition where the defect disappeared or appeared.
+Do not continue below a found candidate until the boundary is confirmed and semantic false positives are excluded. After a positive result at version `N`, test `N+1` from the pristine base if it was not already tested successfully; this establishes the narrow transition where the defect disappeared or appeared.
 
 ## Required artifacts
 
@@ -174,7 +241,18 @@ Save per-candidate artifacts without overwriting prior runs:
 - migration dry-run or no-migration proof
 - exact block hashes and epoch markers for every accounting snapshot
 - all 128 alpha-subnet discrepancy/component rows
+- the version-specific liability inventory and both fixed-formula and corrected rows
 - normalized comparison with adjacent-block, two-tempo, and post-446 controls
+
+Save the Root Reborn audit separately without overwriting candidate reports:
+
+- `js-tests/tests/test-root-reborn-migration-conservation.js`
+- `js-tests/temp/root-reborn-migration-conservation.log`
+- `js-tests/root-reborn-migration-conservation.md`
+- exact adjacent runtime-440/runtime-441 block hashes and code hashes
+- exact migration-completion block and every migration cursor/marker transition
+- per-position legacy owed input and per-subnet destination/conversion-error tables
+- comparison of signed conversion error with the current 1–2% discrepancy
 
 The final report must contain a compact version matrix:
 
@@ -185,7 +263,7 @@ The final report must contain a compact version matrix:
 
 1. Execute each final saved JS test file end-to-end after its last edit; inline probes do not count.
 2. Read and summarize the corresponding saved log.
-3. For a positive result, reproduce from a newly restored pristine clone before declaring the root cause.
+3. For a positive result, reproduce from a newly restored pristine clone before declaring the root cause. For Root Reborn specifically, require both the adjacent-block migration-conservation proof and the signed comparison with the current discrepancy.
 4. Stop the local node with `./scripts/stop-local-clone.sh` and verify no background node/test process remains.
 5. Preserve the pristine snapshot until the search boundary and report have been reviewed.
 6. Commit and push the plan/tests/reports only after final saved-file verification, without including unrelated workspace changes.
