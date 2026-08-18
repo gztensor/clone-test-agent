@@ -29,6 +29,8 @@ Root (netuid 0) is included in network and epoch checks but excluded from this a
 
 These values form the control envelope. Raw movement over a longer run is not sufficient evidence; every result must also be normalized to 720 blocks and compared with the control per subnet and with the global `0.000021877 alpha` maximum.
 
+The `100x` search threshold is intentionally conservative relative to the expected historical signal. If the defect accumulated 100% of the present residual over approximately 2,000,000 blocks, linear scaling predicts about `30,000 / 2,000,000 = 1.5%` of that residual over 30,000 blocks. Corrected runtime 447 moved only about `0.00004%` of the residual over the same scale, so the expected defective signal is approximately `1.5% / 0.00004% = 37,500x` the observed drift. This comparison is valid only when both percentages use the same denominator. Reports must therefore show raw alpha movement and movement as a percentage of the same starting residual, and must also normalize by executed epochs because the suspected defect is epoch-driven.
+
 ## Safety and reproducibility rules
 
 1. Keep one pristine, stopped runtime-447 clone as the common base state. Never run a candidate directly on that copy.
@@ -136,10 +138,10 @@ Abort the iteration as invalid if a historical migration ran, the accounting sta
 Classify an iteration as follows:
 
 - **No acceleration:** the 720-block-normalized movement remains within the runtime-447 control envelope and no repeatable epoch step appears. Restore the pristine clone and test the next lower deployed runtime.
-- **Borderline:** normalized movement exceeds the per-subnet control but is less than an order of magnitude above the global two-tempo maximum, or the movement cannot be isolated from another transition. Run at least one additional epoch and repeat from a fresh clone before deciding.
-- **Root-cause candidate found:** an epoch produces a deterministic accounting step that is at least `10x` the global two-tempo noise maximum after normalization, has matching component evidence, and reproduces from the pristine snapshot. Stop descending, preserve all artifacts, and report the candidate version and exact source diff.
+- **Borderline/elevated:** normalized movement exceeds the per-subnet control but is less than `100x` the corrected control, or the movement cannot be isolated from another transition. Run at least one additional epoch and repeat from a fresh clone before deciding. Do not discard these results; a state-dependent or partial defect may be smaller than the linear estimate.
+- **Root-cause candidate found:** an epoch produces a deterministic accounting step that is at least `100x` the corrected control after normalization, has matching component evidence, and reproduces from the pristine snapshot. Stop descending, preserve all artifacts, and report the candidate version and exact source diff. A result at or above `1,000x` is exceptionally strong evidence, but `1,000x` is not required to stop.
 
-The `10x` threshold is a search/stopping threshold, not an accounting tolerance. All non-zero rao differences remain in the tables. If a clearly structural error moves substantial alpha but does not fit the numerical threshold, stop and report it with the evidence rather than continuing blindly.
+The `100x` threshold is a search/stopping threshold, not an accounting tolerance. It remains far below the approximately `37,500x` signal predicted by the simple 2,000,000-to-30,000-block scaling argument. All non-zero rao differences remain in the tables. If a clearly structural error moves substantial alpha but does not fit the numerical threshold, stop and report it with the evidence rather than continuing blindly.
 
 ## Descending search loop
 
