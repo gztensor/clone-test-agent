@@ -5,24 +5,36 @@ import { fileURLToPath } from "node:url";
 
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
+import { xxhashAsHex } from "@polkadot/util-crypto";
 
 loadDotenv();
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? defaultEndpoint();
 const PAGE_SIZE = Number(process.env.STORAGE_PAGE_SIZE ?? 500);
 const PAGE_DELAY_MS = Number(process.env.STORAGE_PAGE_DELAY_MS ?? 1_000);
+const DISTANCE_MODE = process.env.ALPHA_ACCOUNTING_DISTANCE ?? "two-common-tempos";
+const REQUIRE_EPOCH_FOR_ALL = process.env.REQUIRE_EPOCH_FOR_ALL === "1";
+const EXPECTED_RUNTIME_VERSION = process.env.EXPECTED_RUNTIME_VERSION === undefined
+  ? null
+  : Number(process.env.EXPECTED_RUNTIME_VERSION);
+const REPORT_TITLE = process.env.ALPHA_ACCOUNTING_REPORT_TITLE ??
+  "Mainnet alpha-accounting discrepancy over two tempos";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORT_PATH = path.resolve(
   __dirname,
   "..",
-  "mainnet-alpha-accounting-two-tempos-report.md"
+  process.env.ALPHA_ACCOUNTING_REPORT_FILENAME ??
+    "mainnet-alpha-accounting-two-tempos-report.md"
 );
-const logger = createTempLogger("mainnet-alpha-accounting-two-tempos.log");
+const logger = createTempLogger(
+  process.env.ALPHA_ACCOUNTING_LOG_FILENAME ?? "mainnet-alpha-accounting-two-tempos.log"
+);
 logger.captureConsole();
 
 let api;
+let pendingBasketReadMode = "runtime metadata";
 
-async function main() {
+export async function main() {
   await logger.start();
   api = await connectApi(WS_ENDPOINT, {
     log: (message) => console.log(redactEndpoint(message)),
@@ -42,7 +54,7 @@ async function main() {
       (netuid) => laterMetadata.tempo.get(netuid) ?? 0
     ));
     const commonTempo = selectCommonTempo(tempoDistribution);
-    const distance = commonTempo * 2;
+    const distance = selectDistance(DISTANCE_MODE, commonTempo, alphaNetuids, laterMetadata.tempo);
     const earlierHeight = finalizedHeight - distance;
     assert.ok(earlierHeight > 0, "finalized height is too low for a two-tempo comparison");
 
@@ -64,6 +76,13 @@ async function main() {
       laterRuntime.specVersion.toNumber(),
       "runtime changed during the selected interval"
     );
+    if (EXPECTED_RUNTIME_VERSION !== null) {
+      assert.equal(
+        laterRuntime.specVersion.toNumber(),
+        EXPECTED_RUNTIME_VERSION,
+        "unexpected runtime version for the selected interval"
+      );
+    }
 
     const pair = {
       earlier: { height: earlierHeight, hash: earlierHash, metadata: earlierMetadata },
@@ -110,6 +129,14 @@ async function main() {
     const aboveBaseline = changed.filter(
       (row) => absBigInt(row.discrepancyChange) > nonEpochBaselineBound
     );
+    if (REQUIRE_EPOCH_FOR_ALL) {
+      const missingEpoch = comparisons.filter((row) => row.epochCount < 1n);
+      assert.equal(
+        missingEpoch.length,
+        0,
+        `subnets without an epoch in the selected interval: ${missingEpoch.map((row) => row.netuid).join(", ")}`
+      );
+    }
 
     const report = renderReport({
       generatedAt: new Date().toISOString(),
@@ -126,6 +153,7 @@ async function main() {
       absoluteDecreased,
       nonEpochBaselineBound,
       aboveBaseline,
+      reportTitle: REPORT_TITLE,
     });
     fs.writeFileSync(REPORT_PATH, report);
 
@@ -140,10 +168,20 @@ async function main() {
     console.log("epoch counts:", formatDistribution(countValues(
       comparisons.map((row) => row.epochCount.toString())
     )));
-    console.log("two-tempo alpha-accounting comparison: complete");
+    console.log("alpha-accounting comparison: complete");
 
-    assert.equal(pair.distance, pair.commonTempo * 2);
+    if (DISTANCE_MODE === "two-common-tempos") {
+      assert.equal(pair.distance, pair.commonTempo * 2);
+    }
     assert.ok(comparisons.length > 0, "no active alpha subnets were compared");
+    return {
+      chain: chain.toString(),
+      runtimeName: laterRuntime.specName.toString(),
+      runtimeVersion: laterRuntime.specVersion.toNumber(),
+      pair,
+      comparisons,
+      changed,
+    };
   } finally {
     await api?.disconnect();
   }
@@ -163,7 +201,6 @@ function assertMetadata() {
     ["SubtensorModule.PendingValidatorEmission", api.query.subtensorModule?.pendingValidatorEmission],
     ["SubtensorModule.PendingRootAlphaDivs", api.query.subtensorModule?.pendingRootAlphaDivs],
     ["SubtensorModule.PendingOwnerCut", api.query.subtensorModule?.pendingOwnerCut],
-    ["SubtensorModule.PendingBasketDeposits", api.query.subtensorModule?.pendingBasketDeposits],
   ].filter(([, value]) => !value);
 
   assert.equal(
@@ -223,6 +260,16 @@ async function readAccountingSnapshot(block, netuids, label) {
 }
 
 async function sumDoubleMap(method, blockHash, netuids, label) {
+  if (!api.query.subtensorModule?.[method]) {
+    assert.equal(
+      method,
+      "pendingBasketDeposits",
+      `missing double-map metadata: SubtensorModule.${method}`
+    );
+    pendingBasketReadMode = "raw runtime-447 storage keys";
+    return sumRawPendingBasketDeposits(blockHash, netuids, label);
+  }
+
   console.log(`reading ${label} entries with paced pagination ...`);
   const allowed = new Set(netuids);
   const totals = new Map(netuids.map((netuid) => [netuid, 0n]));
@@ -236,6 +283,52 @@ async function sumDoubleMap(method, blockHash, netuids, label) {
     entryCount += 1;
   });
   console.log(`${label} entries:`, entryCount);
+  return totals;
+}
+
+async function sumRawPendingBasketDeposits(blockHash, netuids, label) {
+  const storagePrefix = xxhashAsHex("SubtensorModule", 128) +
+    xxhashAsHex("PendingBasketDeposits", 128).slice(2);
+  const allowed = new Set(netuids);
+  const totals = new Map(netuids.map((netuid) => [netuid, 0n]));
+  let startKey;
+  let pageNumber = 0;
+  let entryCount = 0;
+
+  console.log(`reading ${label} through raw runtime-447 storage keys ...`);
+  while (true) {
+    const page = await rpcWithRetry(
+      `${label} raw-key page ${pageNumber + 1}`,
+      () => api.rpc.state.getKeysPaged(storagePrefix, PAGE_SIZE, startKey, blockHash)
+    );
+    pageNumber += 1;
+    console.log(`${label} raw-key page ${pageNumber}:`, page.length);
+    if (page.length === 0) break;
+
+    const values = await rpcWithRetry(
+      `${label} raw-value page ${pageNumber}`,
+      () => api.rpc.state.queryStorageAt(page, blockHash)
+    );
+    assert.equal(values.length, page.length, `${label} raw key/value count mismatch`);
+    for (let index = 0; index < page.length; index += 1) {
+      const keyBytes = Buffer.from(page[index].toHex().slice(2), "hex");
+      const valueBytes = Buffer.from(values[index].toHex().slice(2), "hex");
+      assert.equal(keyBytes.length, 82, `${label} unexpected raw key length`);
+      assert.equal(valueBytes.length, 8, `${label} unexpected AlphaBalance length`);
+      const netuid = keyBytes.readUInt16LE(keyBytes.length - 2);
+      if (allowed.has(netuid)) {
+        totals.set(netuid, (totals.get(netuid) ?? 0n) + valueBytes.readBigUInt64LE());
+      }
+      entryCount += 1;
+    }
+
+    if (page.length < PAGE_SIZE) break;
+    const nextStartKey = page.at(-1).toHex();
+    assert.notEqual(nextStartKey, startKey, `${label} raw pagination did not advance`);
+    startKey = nextStartKey;
+    await delay(PAGE_DELAY_MS);
+  }
+  console.log(`${label} raw entries:`, entryCount);
   return totals;
 }
 
@@ -360,18 +453,42 @@ function renderReport(snapshot) {
   const absoluteIncreaseNetuids = snapshot.absoluteIncreased
     .map((row) => row.netuid)
     .join(", ") || "none";
+  const totalEpochs = snapshot.comparisons.reduce(
+    (sum, row) => sum + row.epochCount,
+    0n,
+  );
+  const intervalDescription = totalEpochs > 0n
+    ? "epoch-spanning interval"
+    : "measured interval, in which no subnet epoch executed";
+  const baselineVerdict = snapshot.aboveBaseline.length === 0
+    ? "No movement exceeded the previously observed adjacent-block rounding baseline."
+    : `${snapshot.aboveBaseline.length} movement(s) exceeded the previously observed ` +
+      `adjacent-block rounding baseline and require component-level interpretation.`;
   const genesisScaleUpperBound = maxMovement *
     BigInt(Math.ceil(snapshot.pair.later.height / snapshot.pair.distance));
+  const movementScale = EXPECTED_RUNTIME_VERSION === null
+    ? `Even extrapolating that worst observed rate across the chain's entire block height ` +
+      `gives only ${formatAlpha(genesisScaleUpperBound)} α, so this effect cannot explain ` +
+      `residuals of hundreds or thousands of alpha.`
+    : `Historical-candidate significance is assessed against the corrected runtime-447 ` +
+      `controls below; the accelerated clone's local block height is not used for extrapolation.`;
   const verdict = snapshot.signedIncreased.length === 0
-    ? `No subnet's signed discrepancy increased. It decreased on ${snapshot.signedDecreased.length} alpha subnets and was unchanged on ${snapshot.comparisons.length - snapshot.changed.length} (${unchangedNetuids}). ${snapshot.aboveBaseline.length} movements exceeded the previously observed adjacent-block rounding baseline, so an additional micro-alpha-scale effect is present in this epoch-spanning interval, but its direction reduces positive residuals rather than creating them.`
-    : `${snapshot.signedIncreased.length} subnet(s) increased signed discrepancy in this epoch-spanning interval: ${snapshot.signedIncreased.map((row) => row.netuid).join(", ")}.`;
+    ? `No subnet's signed discrepancy increased in the ${intervalDescription}. It decreased on ` +
+      `${snapshot.signedDecreased.length} alpha subnets and was unchanged on ` +
+      `${snapshot.comparisons.length - snapshot.changed.length} (${unchangedNetuids}). ` +
+      baselineVerdict
+    : `${snapshot.signedIncreased.length} subnet(s) increased signed discrepancy in the ` +
+      `${intervalDescription}: ${snapshot.signedIncreased.map((row) => row.netuid).join(", ")}. ` +
+      baselineVerdict;
 
-  return `# Mainnet alpha-accounting discrepancy over two tempos\n\n` +
+  return `# ${snapshot.reportTitle}\n\n` +
     `Generated: ${snapshot.generatedAt}\n\n` +
     `## Result\n\n` +
     `${verdict}\n\n` +
-    `The largest raw discrepancy movement was ${formatAlpha(maxMovement)} α. Even extrapolating that worst observed rate across the chain's entire block height gives only ${formatAlpha(genesisScaleUpperBound)} α, so this effect cannot explain residuals of hundreds or thousands of alpha. Measurements are exact to one rao; every non-zero movement is reported below.\n\n` +
-    `Because four subnets began with negative residuals, the negative signed movement increased their absolute discrepancy: ${absoluteIncreaseNetuids}. Absolute discrepancy decreased on the other ${snapshot.absoluteDecreased.length} changed subnets.\n\n` +
+    `The largest raw discrepancy movement was ${formatAlpha(maxMovement)} α. ${movementScale} ` +
+    `Measurements are exact to one rao; every non-zero movement is reported below.\n\n` +
+    `Absolute discrepancy increased on: ${absoluteIncreaseNetuids}. Absolute discrepancy decreased on ` +
+    `${snapshot.absoluteDecreased.length} changed subnets.\n\n` +
     `| Chain | Runtime | Networks inspected | Alpha subnets compared | Block distance | Common alpha tempo | Signed Δ increased | Signed Δ decreased | Signed Δ unchanged | Absolute discrepancy increased | Absolute discrepancy decreased | Above non-epoch baseline |\n` +
     `|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n` +
     `| ${snapshot.chain} | \`${snapshot.runtimeName}/${snapshot.runtimeVersion}\` | ` +
@@ -386,7 +503,7 @@ function renderReport(snapshot) {
     `| Snapshot | Block | Hash |\n|---|---:|---|\n` +
     `| Earlier | ${snapshot.pair.earlier.height.toLocaleString("en-US")} | \`${snapshot.pair.earlier.hash}\` |\n` +
     `| Later | ${snapshot.pair.later.height.toLocaleString("en-US")} | \`${snapshot.pair.later.hash}\` |\n\n` +
-    `The blocks are exactly ${snapshot.pair.distance} blocks apart: two periods of the common ${snapshot.pair.commonTempo}-block alpha-subnet tempo. Exact epoch executions were measured from the change in \`SubnetEpochIndex\`, which the runtime increments after every successful subnet epoch.\n\n` +
+    `The blocks are exactly ${snapshot.pair.distance} blocks apart. The common alpha-subnet tempo is ${snapshot.pair.commonTempo} blocks. Exact epoch executions were measured from the change in \`SubnetEpochIndex\`, which the runtime increments after every successful subnet epoch.\n\n` +
     distributionTable("Tempo", snapshot.tempoDistribution) + `\n` +
     distributionTable("Epochs executed in interval", epochDistribution) + `\n` +
     `## Discrepancy changes\n\n` +
@@ -400,6 +517,8 @@ function renderReport(snapshot) {
     `- Calculated staked alpha = \`SubnetAlphaOut - AlphaBurned - pending alpha - SubnetProtocolAlpha\`.\n` +
     `- Signed discrepancy Δ = \`actual staked alpha - calculated staked alpha\`.\n` +
     `- Discrepancy movement = \`Δ(later) - Δ(earlier)\`.\n\n` +
+    `PendingBasketDeposits read mode: ${pendingBasketReadMode}. Historical runtimes that ` +
+    `predate this storage item are measured from the still-present runtime-447 raw keys.\n\n` +
     `The “above baseline” marker is comparative, not a tolerance in the accounting formula. It uses the preceding adjacent-block measurement of 2–3 rao per block to identify movements too large to be explained by that observed drift.\n`;
 }
 
@@ -452,6 +571,18 @@ function selectCommonTempo(distribution) {
   positive.sort(([leftTempo, leftCount], [rightTempo, rightCount]) =>
     rightCount - leftCount || Number(leftTempo) - Number(rightTempo));
   return Number(positive[0][0]);
+}
+
+function selectDistance(mode, commonTempo, netuids, tempo) {
+  if (mode === "two-common-tempos") return commonTempo * 2;
+  if (mode === "max-tempo") {
+    const maximum = Math.max(...netuids.map((netuid) => tempo.get(netuid) ?? 0));
+    assert.ok(maximum > 0, "no positive maximum tempo found");
+    return maximum;
+  }
+  const explicit = Number(mode);
+  assert.ok(Number.isSafeInteger(explicit) && explicit > 0, `invalid distance: ${mode}`);
+  return explicit;
 }
 
 function formatDistribution(distribution) {
@@ -524,8 +655,10 @@ function redactEndpoint(endpoint) {
   return endpoint.replace(/(apikey=)[^&]+/i, "$1<redacted>");
 }
 
-main().catch(async (error) => {
-  await logger.error(error);
-  await logger.flush();
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(async (error) => {
+    await logger.error(error);
+    await logger.flush();
+    process.exit(1);
+  });
+}
