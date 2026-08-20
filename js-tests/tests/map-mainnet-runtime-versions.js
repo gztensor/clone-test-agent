@@ -9,7 +9,7 @@ import { createTempLogger } from "../lib/file-log.js";
 loadDotenv();
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? defaultEndpoint();
-const TARGET_VERSIONS = (process.env.RUNTIME_VERSIONS ?? "445,444,443,442,441,440,439,438,437")
+const TARGET_VERSIONS = (process.env.RUNTIME_VERSIONS ?? "445,444,443,442,441,440,439,438,437,432,431,430,424,423,422,421,420,419,418,417,416,415,414,413,412,411,402,401,393,392,391,385,377,374,373,372,367,366,365,362,361,352,351,350,349,348,347,345,343,338,334,326,323,320,315,306,302,301,298,297")
   .split(",")
   .map((value) => Number(value.trim()))
   .filter(Number.isInteger);
@@ -24,9 +24,58 @@ const SOURCE_TAGS = new Map([
   [439, ["v439", "cda8fd76ad2a7014cac632933237abf1ddaa9b30"]],
   [438, ["v438", "c1463f2cc62e7de70aa3379ee53cfc5f060bde42"]],
   [437, ["v437", "2d52647c415aa987ab93dbd7de4ddc5eaf7aa083"]],
+  [432, ["v432", "8586e65ec279644a6837cf25b12333064c77474e"]],
+  [431, ["v431", "32f3b652cfa74df5f8f595a5be051bf5bb86925f"]],
+  [430, ["v430", "9c8e26e7fccc76327ab5204f7978aa2e4d86efd6"]],
+  [424, ["main@spec-424", "bb51677451dc74f2152d44a9a0c30b18b5e634fc"]],
+  [423, ["main@spec-423", "06032d518fbaead1ddc2039e9e6aa55715026364"]],
+  [422, ["main@spec-422", "e367ae64709a22cfeb7ec114814a14f0db137a83"]],
+  [421, ["main@spec-421", "6016381e4fb230d17643cca948afe296eb06faac"]],
+  [419, ["main@spec-419", "fa83646297f45a1a8108f70ba2ebf32d4f35b5c2"]],
+  [417, ["main@spec-417", "49164bd68afd71e48e3c80d268ed80f22b98a2b1"]],
+  [416, ["main@spec-416", "34a284751cc3151ae8017451919101f59e39744d"]],
+  [415, ["main@spec-415", "1104f2aab5acdf69fe967a787c7ae1cc5fdf170c"]],
+  [413, ["main@spec-413", "ec2212c53fc7c0252af80c28e50a959cce2f9890"]],
+  [411, ["main@spec-411", "486037ba45b87a453b1d660177cc1b105d0298c6"]],
+  [402, ["v3.3.15-402", "6844ee37f0b8cb02baf9ff8d3ca4319cfb33f361"]],
+  [401, ["v3.3.14-401", "40a451f366900d00ec0b3781e4c5a4a92ba9a6b6"]],
+  [393, ["v3.3.13-393", "4a2e4b1282dbcf4e020b3f97f9a0c7442b756792"]],
+  [392, ["main@spec-392", "036cfe087be3c50c988185af465a20cea2b132c9"]],
+  [391, ["v3.3.12-391", "7a727dd4d219a953391e91ed2f7aa942050938f1"]],
+  [385, ["v3.3.11-385", "7eb6f9bb7c9ea19d60d11890d04ca352f9257fa8"]],
+  [377, ["v3.3.9-377", "b2e2cdebaf39c1badfc1af1cd0b5de5d0ddebb4c"]],
+  [374, ["v3.3.7-374", "a8d2ad019e18ecbc010a4b5e04524c05c15bab8a"]],
+  [373, ["v3.3.7-373", "206e7c890d2ac4268257cfd205bcf80100225241"]],
+  [372, ["v3.3.6-372", "fffba8c072984cd417689666dc8b0c9e80dc9f81"]],
+  [367, ["v3.3.4-367", "8f13194c6e56f218910b4a9c708199cc38f64c40"]],
+  [366, ["v3.3.3-366", "d65dbaedf833e1b55ba6f1487c333ffe49f062d2"]],
+  [365, ["v3.3.2-365", "6e3d24cea446b3241524bb319b72bf506e8e8eb4"]],
+  [362, ["v3.3.1-362", "8834a7c737583c8ab8d6c3abdbd4865e039e24a9"]],
+  [361, ["v3.3.0-361", "52378dc3e911cdfc7b8e3cf1160a6e0e4dde4fd6"]],
+  [352, ["v3.2.19-352", "024a3049157b83329e041f3e60ae3da611a022bb"]],
+  [351, ["v3.2.18-351", "3face26e735211188ec776b4559f185d3b2c952f"]],
+  [350, ["v3.2.17-350", "4d3a7ab3422f587c3f3faa855dd03d73ccbcbfdf"]],
+  [349, ["v3.2.16-349", "20cbabc70fb2528d166ab2a296a1d656a6e5a106"]],
+  [348, ["v3.2.15-348", "459fa72d1468b6dc7485de7392996de50169fbf8"]],
+  [347, ["v3.2.15-347", "6304dbedc34c6b271546a9338d9b870ceb1ac625"]],
+  [345, ["3.2.14-345", "8f33f8cbf6b958b9ec215424a50d96cd2fc5e5ae"]],
+  [343, ["v3.2.13-343", "b179867c306fb6a28345896f422910e603799d70"]],
+  [338, ["v3.2.11-338", "1f520ed9587ce588994d48937aca0de8262cf784"]],
+  [334, ["v3.2.10-334", "6218ecc5cdab527a649c8fa5b0194db3f884571c"]],
+  [326, ["v3.2.9-326", "ae2b37364ce53cf9af44d4088f4ef53ad859f8b8"]],
+  [323, ["v3.2.9-323", "79010a36cdb8391bb5de5c86acd0387d71f462c9"]],
+  [320, ["v3.2.8-320", "835a2c90294705b5963043f5ef31460304df2475"]],
+  [315, ["v3.2.7", "81ee047fd124f8837555fd79e8a3957688c5b0c6"]],
+  [306, ["v3.2.6", "737e4acb173cddbe6fde9c6085853ef8b8f02a80"]],
+  [302, ["v3.2.5", "67c7ac6923b498c15f5541fd0e9ddcbeed38c3b7"]],
+  [301, ["v3.2.4", "312c0be95983a98bed4120526351a94219d00449"]],
+  [298, ["v3.2.3", "6309d35929e484ebff70c7da68547fb9c60f0d11"]],
+  [297, ["v3.2.2", "7b541095b057a68e0090d8348bdc96a70dc56be8"]],
 ]);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPORT_PATH = path.resolve(__dirname, "..", "mainnet-runtime-version-map.md");
+const REPORT_PATH = process.env.RUNTIME_MAP_REPORT_PATH
+  ? path.resolve(process.env.RUNTIME_MAP_REPORT_PATH)
+  : path.resolve(__dirname, "..", "mainnet-runtime-version-map.md");
 const logger = createTempLogger("mainnet-runtime-version-map.log");
 logger.captureConsole();
 

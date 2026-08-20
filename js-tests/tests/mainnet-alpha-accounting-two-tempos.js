@@ -17,6 +17,9 @@ const REQUIRE_EPOCH_FOR_ALL = process.env.REQUIRE_EPOCH_FOR_ALL === "1";
 const EXPECTED_RUNTIME_VERSION = process.env.EXPECTED_RUNTIME_VERSION === undefined
   ? null
   : Number(process.env.EXPECTED_RUNTIME_VERSION);
+const LATER_BLOCK = process.env.ALPHA_ACCOUNTING_LATER_BLOCK === undefined
+  ? null
+  : Number(process.env.ALPHA_ACCOUNTING_LATER_BLOCK);
 const REPORT_TITLE = process.env.ALPHA_ACCOUNTING_REPORT_TITLE ??
   "Mainnet alpha-accounting discrepancy over two tempos";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +36,9 @@ logger.captureConsole();
 
 let api;
 let pendingBasketReadMode = "runtime metadata";
+let protocolAlphaReadMode = "runtime metadata";
+let subnetPendingReadMode = "split runtime metadata";
+let rootPendingReadMode = "PendingRootAlphaDivs (alpha liability)";
 
 export async function main() {
   await logger.start();
@@ -48,14 +54,22 @@ export async function main() {
     const finalizedHash = await api.rpc.chain.getFinalizedHead();
     const finalizedHeader = await api.rpc.chain.getHeader(finalizedHash);
     const finalizedHeight = finalizedHeader.number.toNumber();
-    const laterMetadata = await readNetworkMetadata(finalizedHash.toString(), finalizedHeight);
+    const laterHeight = LATER_BLOCK ?? finalizedHeight;
+    assert.ok(
+      Number.isSafeInteger(laterHeight) && laterHeight > 0 && laterHeight <= finalizedHeight,
+      `invalid later block: ${laterHeight}`
+    );
+    const laterHash = LATER_BLOCK === null
+      ? finalizedHash.toString()
+      : (await api.rpc.chain.getBlockHash(laterHeight)).toString();
+    const laterMetadata = await readNetworkMetadata(laterHash, laterHeight);
     const alphaNetuids = laterMetadata.activeNetuids.filter((netuid) => netuid > 0);
     const tempoDistribution = countValues(alphaNetuids.map(
       (netuid) => laterMetadata.tempo.get(netuid) ?? 0
     ));
     const commonTempo = selectCommonTempo(tempoDistribution);
     const distance = selectDistance(DISTANCE_MODE, commonTempo, alphaNetuids, laterMetadata.tempo);
-    const earlierHeight = finalizedHeight - distance;
+    const earlierHeight = laterHeight - distance;
     assert.ok(earlierHeight > 0, "finalized height is too low for a two-tempo comparison");
 
     const earlierHash = (await api.rpc.chain.getBlockHash(earlierHeight)).toString();
@@ -69,7 +83,7 @@ export async function main() {
     const [chain, earlierRuntime, laterRuntime] = await Promise.all([
       api.rpc.system.chain(),
       api.rpc.state.getRuntimeVersion(earlierHash),
-      api.rpc.state.getRuntimeVersion(finalizedHash),
+      api.rpc.state.getRuntimeVersion(laterHash),
     ]);
     assert.equal(
       earlierRuntime.specVersion.toNumber(),
@@ -87,8 +101,8 @@ export async function main() {
     const pair = {
       earlier: { height: earlierHeight, hash: earlierHash, metadata: earlierMetadata },
       later: {
-        height: finalizedHeight,
-        hash: finalizedHash.toString(),
+        height: laterHeight,
+        hash: laterHash,
         metadata: laterMetadata,
       },
       commonTempo,
@@ -105,18 +119,22 @@ export async function main() {
     console.log("selected common alpha-subnet tempo:", commonTempo);
     console.log("block distance:", distance);
     console.log("earlier block:", earlierHeight, earlierHash);
-    console.log("later block:", finalizedHeight, finalizedHash.toString());
+    console.log("later block:", laterHeight, laterHash);
     console.log("active networks including root:", laterMetadata.activeNetuids.length);
     console.log("active alpha subnets:", alphaNetuids.length);
 
     const earlier = await readAccountingSnapshot(pair.earlier, alphaNetuids, "earlier");
     const later = await readAccountingSnapshot(pair.later, alphaNetuids, "later");
+    assert.equal(
+      earlierMetadata.epochMarkerMode,
+      laterMetadata.epochMarkerMode,
+      "epoch marker mode changed during the selected interval"
+    );
     const comparisons = alphaNetuids.map((netuid) => compareRows({
       earlier: earlier.rows.get(netuid),
       later: later.rows.get(netuid),
       tempo: laterMetadata.tempo.get(netuid) ?? 0,
-      epochCount: (laterMetadata.epochIndex.get(netuid) ?? 0n) -
-        (earlierMetadata.epochIndex.get(netuid) ?? 0n),
+      epochCount: calculateEpochCount(netuid, earlierMetadata, laterMetadata),
       lastEpochAdvance: (laterMetadata.lastEpoch.get(netuid) ?? 0n) -
         (earlierMetadata.lastEpoch.get(netuid) ?? 0n),
     }));
@@ -188,18 +206,39 @@ export async function main() {
 }
 
 function assertMetadata() {
+  const hasModernEpochMarkers = Boolean(
+    api.query.subtensorModule?.lastEpochBlock &&
+    api.query.subtensorModule?.subnetEpochIndex
+  );
+  const hasLegacyEpochMarker = Boolean(api.query.subtensorModule?.lastMechansimStepBlock);
+  const hasSplitSubnetPending = Boolean(
+    api.query.subtensorModule?.pendingServerEmission &&
+    api.query.subtensorModule?.pendingValidatorEmission
+  );
+  const hasLegacySubnetPending = Boolean(api.query.subtensorModule?.pendingEmission);
+  const hasAlphaRootPending = Boolean(api.query.subtensorModule?.pendingRootAlphaDivs);
+  const hasLegacyTaoRootPending = Boolean(
+    api.query.subtensorModule?.pendingRootDivs &&
+    api.query.subtensorModule?.pendingAlphaSwapped
+  );
   const required = [
     ["SubtensorModule.NetworksAdded", api.query.subtensorModule?.networksAdded],
     ["SubtensorModule.Tempo", api.query.subtensorModule?.tempo],
-    ["SubtensorModule.LastEpochBlock", api.query.subtensorModule?.lastEpochBlock],
-    ["SubtensorModule.SubnetEpochIndex", api.query.subtensorModule?.subnetEpochIndex],
+    [
+      "SubtensorModule.LastEpochBlock/SubnetEpochIndex or LastMechansimStepBlock",
+      hasModernEpochMarkers || hasLegacyEpochMarker,
+    ],
     ["SubtensorModule.TotalHotkeyAlpha", api.query.subtensorModule?.totalHotkeyAlpha],
     ["SubtensorModule.SubnetAlphaOut", api.query.subtensorModule?.subnetAlphaOut],
     ["AlphaAssets.AlphaBurned", api.query.alphaAssets?.alphaBurned],
-    ["SubtensorModule.SubnetProtocolAlpha", api.query.subtensorModule?.subnetProtocolAlpha],
-    ["SubtensorModule.PendingServerEmission", api.query.subtensorModule?.pendingServerEmission],
-    ["SubtensorModule.PendingValidatorEmission", api.query.subtensorModule?.pendingValidatorEmission],
-    ["SubtensorModule.PendingRootAlphaDivs", api.query.subtensorModule?.pendingRootAlphaDivs],
+    [
+      "SubtensorModule.PendingServerEmission/PendingValidatorEmission or PendingEmission",
+      hasSplitSubnetPending || hasLegacySubnetPending,
+    ],
+    [
+      "SubtensorModule.PendingRootAlphaDivs or PendingRootDivs/PendingAlphaSwapped",
+      hasAlphaRootPending || hasLegacyTaoRootPending,
+    ],
     ["SubtensorModule.PendingOwnerCut", api.query.subtensorModule?.pendingOwnerCut],
   ].filter(([, value]) => !value);
 
@@ -212,15 +251,25 @@ function assertMetadata() {
 
 async function readNetworkMetadata(blockHash, height) {
   console.log(`reading network and epoch metadata at block ${height} ...`);
+  const apiAt = await api.at(blockHash);
+  const hasModernEpochMarkers = Boolean(
+    apiAt.query.subtensorModule?.lastEpochBlock &&
+    apiAt.query.subtensorModule?.subnetEpochIndex
+  );
+  const lastEpochQuery = hasModernEpochMarkers
+    ? apiAt.query.subtensorModule.lastEpochBlock
+    : apiAt.query.subtensorModule.lastMechansimStepBlock;
   const [networkEntries, tempoEntries, lastEpochEntries, epochIndexEntries] = await Promise.all([
     rpcWithRetry(`NetworksAdded at ${height}`, () =>
-      api.query.subtensorModule.networksAdded.entriesAt(blockHash)),
+      apiAt.query.subtensorModule.networksAdded.entries()),
     rpcWithRetry(`Tempo at ${height}`, () =>
-      api.query.subtensorModule.tempo.entriesAt(blockHash)),
-    rpcWithRetry(`LastEpochBlock at ${height}`, () =>
-      api.query.subtensorModule.lastEpochBlock.entriesAt(blockHash)),
-    rpcWithRetry(`SubnetEpochIndex at ${height}`, () =>
-      api.query.subtensorModule.subnetEpochIndex.entriesAt(blockHash)),
+      apiAt.query.subtensorModule.tempo.entries()),
+    rpcWithRetry(`${hasModernEpochMarkers ? "LastEpochBlock" : "LastMechansimStepBlock"} at ${height}`, () =>
+      lastEpochQuery.entries()),
+    hasModernEpochMarkers
+      ? rpcWithRetry(`SubnetEpochIndex at ${height}`, () =>
+        apiAt.query.subtensorModule.subnetEpochIndex.entries())
+      : Promise.resolve([]),
   ]);
   return {
     activeNetuids: networkEntries
@@ -230,7 +279,28 @@ async function readNetworkMetadata(blockHash, height) {
     tempo: entryMap(tempoEntries, (value) => value.toNumber()),
     lastEpoch: entryMap(lastEpochEntries, codecBigInt),
     epochIndex: entryMap(epochIndexEntries, codecBigInt),
+    epochMarkerMode: hasModernEpochMarkers ? "subnet-epoch-index" : "legacy-mechanism-step",
   };
+}
+
+function calculateEpochCount(netuid, earlierMetadata, laterMetadata) {
+  if (laterMetadata.epochMarkerMode === "subnet-epoch-index") {
+    return (laterMetadata.epochIndex.get(netuid) ?? 0n) -
+      (earlierMetadata.epochIndex.get(netuid) ?? 0n);
+  }
+
+  const tempo = BigInt(laterMetadata.tempo.get(netuid) ?? 0);
+  if (tempo === 0n) return 0n;
+  const markerAdvance = (laterMetadata.lastEpoch.get(netuid) ?? 0n) -
+    (earlierMetadata.lastEpoch.get(netuid) ?? 0n);
+  const period = tempo + 1n;
+  assert.ok(markerAdvance >= 0n, `legacy epoch marker moved backward on subnet ${netuid}`);
+  assert.equal(
+    markerAdvance % period,
+    0n,
+    `legacy epoch marker advance is not divisible by tempo + 1 on subnet ${netuid}`
+  );
+  return markerAdvance / period;
 }
 
 async function readAccountingSnapshot(block, netuids, label) {
@@ -260,7 +330,8 @@ async function readAccountingSnapshot(block, netuids, label) {
 }
 
 async function sumDoubleMap(method, blockHash, netuids, label) {
-  if (!api.query.subtensorModule?.[method]) {
+  const apiAt = await api.at(blockHash);
+  if (!apiAt.query.subtensorModule?.[method]) {
     assert.equal(
       method,
       "pendingBasketDeposits",
@@ -333,24 +404,125 @@ async function sumRawPendingBasketDeposits(blockHash, netuids, label) {
 }
 
 async function readAccountingMaps(blockHash, label) {
+  const apiAt = await api.at(blockHash);
   const definitions = [
-    ["alphaOut", api.query.subtensorModule.subnetAlphaOut],
-    ["burned", api.query.alphaAssets.alphaBurned],
-    ["protocol", api.query.subtensorModule.subnetProtocolAlpha],
-    ["pendingServer", api.query.subtensorModule.pendingServerEmission],
-    ["pendingValidator", api.query.subtensorModule.pendingValidatorEmission],
-    ["pendingRoot", api.query.subtensorModule.pendingRootAlphaDivs],
-    ["pendingOwner", api.query.subtensorModule.pendingOwnerCut],
+    ["alphaOut", apiAt.query.subtensorModule.subnetAlphaOut],
+    ["burned", apiAt.query.alphaAssets.alphaBurned],
   ];
   const result = {};
+  if (apiAt.query.subtensorModule?.subnetProtocolAlpha) {
+    definitions.splice(2, 0, ["protocol", apiAt.query.subtensorModule.subnetProtocolAlpha]);
+  } else {
+    protocolAlphaReadMode = "raw frozen runtime-447 storage keys";
+    result.protocol = await readRawIdentityNetuidAlphaMap(
+      blockHash,
+      label,
+      "SubnetProtocolAlpha"
+    );
+  }
+  if (
+    apiAt.query.subtensorModule?.pendingServerEmission &&
+    apiAt.query.subtensorModule?.pendingValidatorEmission
+  ) {
+    definitions.push(
+      ["pendingServer", apiAt.query.subtensorModule.pendingServerEmission],
+      ["pendingValidator", apiAt.query.subtensorModule.pendingValidatorEmission]
+    );
+    result.legacyPending = new Map();
+  } else {
+    assert.ok(
+      apiAt.query.subtensorModule?.pendingEmission,
+      "runtime has neither split nor legacy subnet pending-emission storage"
+    );
+    subnetPendingReadMode =
+      "legacy PendingEmission plus frozen runtime-447 PendingServerEmission/PendingValidatorEmission";
+    result.pendingServer = await readRawIdentityNetuidAlphaMap(
+      blockHash,
+      label,
+      "PendingServerEmission"
+    );
+    result.pendingValidator = await readRawIdentityNetuidAlphaMap(
+      blockHash,
+      label,
+      "PendingValidatorEmission"
+    );
+    definitions.push(["legacyPending", apiAt.query.subtensorModule.pendingEmission]);
+  }
+  if (apiAt.query.subtensorModule?.pendingRootAlphaDivs) {
+    definitions.push(["pendingRoot", apiAt.query.subtensorModule.pendingRootAlphaDivs]);
+  } else {
+    assert.ok(
+      apiAt.query.subtensorModule?.pendingRootDivs &&
+        apiAt.query.subtensorModule?.pendingAlphaSwapped,
+      "runtime has neither alpha-root pending nor the legacy TAO-root pending architecture"
+    );
+    // In this architecture root alpha is sold immediately. The swap already reduces
+    // SubnetAlphaOut; PendingRootDivs is denominated in TAO and PendingAlphaSwapped is
+    // only an epoch-calculation record, so neither is an outstanding alpha liability.
+    result.pendingRoot = new Map();
+    rootPendingReadMode =
+      "legacy TAO PendingRootDivs/PendingAlphaSwapped (excluded: root alpha was already sold)";
+  }
+  definitions.push(["pendingOwner", apiAt.query.subtensorModule.pendingOwnerCut]);
   for (const [name, query] of definitions) {
     console.log(`reading ${label} ${name} entries ...`);
     result[name] = entryMap(
-      await rpcWithRetry(`${label} ${name}.entriesAt`, () => query.entriesAt(blockHash)),
+      await rpcWithRetry(`${label} ${name}.entries`, () => query.entries()),
       codecBigInt
     );
     await delay(PAGE_DELAY_MS);
   }
+  return result;
+}
+
+async function readRawIdentityNetuidAlphaMap(blockHash, label, storageName) {
+  const storagePrefix = xxhashAsHex("SubtensorModule", 128) +
+    xxhashAsHex(storageName, 128).slice(2);
+  const result = new Map();
+  let startKey;
+  let pageNumber = 0;
+  let entryCount = 0;
+
+  console.log(`reading ${label} ${storageName} through raw storage keys ...`);
+  while (true) {
+    const page = await rpcWithRetry(
+      `${label} ${storageName} raw-key page ${pageNumber + 1}`,
+      () => api.rpc.state.getKeysPaged(storagePrefix, PAGE_SIZE, startKey, blockHash)
+    );
+    pageNumber += 1;
+    console.log(`${label} ${storageName} raw-key page ${pageNumber}:`, page.length);
+    if (page.length === 0) break;
+
+    const values = await rpcWithRetry(
+      `${label} ${storageName} raw-value page ${pageNumber}`,
+      () => api.rpc.state.queryStorageAt(page, blockHash)
+    );
+    assert.equal(
+      values.length,
+      page.length,
+      `${label} ${storageName} raw key/value count mismatch`
+    );
+    for (let index = 0; index < page.length; index += 1) {
+      const keyBytes = Buffer.from(page[index].toHex().slice(2), "hex");
+      const valueBytes = Buffer.from(values[index].toHex().slice(2), "hex");
+      assert.equal(keyBytes.length, 34, `${label} ${storageName} unexpected raw key length`);
+      assert.equal(valueBytes.length, 8, `${label} ${storageName} unexpected AlphaBalance length`);
+      const netuid = keyBytes.readUInt16LE(keyBytes.length - 2);
+      result.set(netuid, valueBytes.readBigUInt64LE());
+      entryCount += 1;
+    }
+
+    if (page.length < PAGE_SIZE) break;
+    const nextStartKey = page.at(-1).toHex();
+    assert.notEqual(
+      nextStartKey,
+      startKey,
+      `${label} ${storageName} raw pagination did not advance`
+    );
+    startKey = nextStartKey;
+    await delay(PAGE_DELAY_MS);
+  }
+  console.log(`${label} ${storageName} raw entries:`, entryCount);
   return result;
 }
 
@@ -399,6 +571,7 @@ function accountingRow({ netuid, actualStake, pendingBasket, storageMaps }) {
   const protocol = storageMaps.protocol.get(netuid) ?? 0n;
   const pending = (storageMaps.pendingServer.get(netuid) ?? 0n) +
     (storageMaps.pendingValidator.get(netuid) ?? 0n) +
+    (storageMaps.legacyPending.get(netuid) ?? 0n) +
     (storageMaps.pendingRoot.get(netuid) ?? 0n) +
     (storageMaps.pendingOwner.get(netuid) ?? 0n) + pendingBasket;
   const calculatedStake = alphaOut - burned - pending - protocol;
@@ -481,6 +654,10 @@ function renderReport(snapshot) {
       `${intervalDescription}: ${snapshot.signedIncreased.map((row) => row.netuid).join(", ")}. ` +
       baselineVerdict;
 
+  const epochVerification = snapshot.pair.later.metadata.epochMarkerMode === "subnet-epoch-index"
+    ? "Exact epoch executions were measured from the change in `SubnetEpochIndex`, which the runtime increments after every successful subnet epoch."
+    : "Successful epoch executions were measured from `LastMechansimStepBlock`; for this legacy scheduler, consecutive successful epochs are exactly `tempo + 1` blocks apart.";
+
   return `# ${snapshot.reportTitle}\n\n` +
     `Generated: ${snapshot.generatedAt}\n\n` +
     `## Result\n\n` +
@@ -503,7 +680,7 @@ function renderReport(snapshot) {
     `| Snapshot | Block | Hash |\n|---|---:|---|\n` +
     `| Earlier | ${snapshot.pair.earlier.height.toLocaleString("en-US")} | \`${snapshot.pair.earlier.hash}\` |\n` +
     `| Later | ${snapshot.pair.later.height.toLocaleString("en-US")} | \`${snapshot.pair.later.hash}\` |\n\n` +
-    `The blocks are exactly ${snapshot.pair.distance} blocks apart. The common alpha-subnet tempo is ${snapshot.pair.commonTempo} blocks. Exact epoch executions were measured from the change in \`SubnetEpochIndex\`, which the runtime increments after every successful subnet epoch.\n\n` +
+    `The blocks are exactly ${snapshot.pair.distance} blocks apart. The common alpha-subnet tempo is ${snapshot.pair.commonTempo} blocks. ${epochVerification}\n\n` +
     distributionTable("Tempo", snapshot.tempoDistribution) + `\n` +
     distributionTable("Epochs executed in interval", epochDistribution) + `\n` +
     `## Discrepancy changes\n\n` +
@@ -513,18 +690,29 @@ function renderReport(snapshot) {
     `\n## Method\n\n` +
     `For each active alpha subnet at both exact block hashes:\n\n` +
     `- Actual staked alpha = \`sum(TotalHotkeyAlpha(hotkey, netuid))\`.\n` +
-    `- Pending alpha = \`PendingServerEmission + PendingValidatorEmission + PendingRootAlphaDivs + PendingOwnerCut + PendingBasketDeposits\`.\n` +
+    `- Pending alpha = split server/validator pending or legacy \`PendingEmission\`, plus ` +
+    `any root-alpha liability, \`PendingOwnerCut\`, and \`PendingBasketDeposits\`.\n` +
     `- Calculated staked alpha = \`SubnetAlphaOut - AlphaBurned - pending alpha - SubnetProtocolAlpha\`.\n` +
     `- Signed discrepancy Δ = \`actual staked alpha - calculated staked alpha\`.\n` +
     `- Discrepancy movement = \`Δ(later) - Δ(earlier)\`.\n\n` +
     `PendingBasketDeposits read mode: ${pendingBasketReadMode}. Historical runtimes that ` +
     `predate this storage item are measured from the still-present runtime-447 raw keys.\n\n` +
+    `Subnet pending-emission read mode: ${subnetPendingReadMode}. For legacy runtimes, the ` +
+    `live historical \`PendingEmission\` liability is added to the frozen synced-state ` +
+    `\`PendingServerEmission\` and \`PendingValidatorEmission\` liabilities.\n\n` +
+    `Root pending-emission read mode: ${rootPendingReadMode}. In the legacy TAO-root ` +
+    `architecture, \`PendingRootDivs\` is TAO and \`PendingAlphaSwapped\` records alpha ` +
+    `already sold through the pool; subtracting either from AlphaOut would double-count it.\n\n` +
+    `SubnetProtocolAlpha read mode: ${protocolAlphaReadMode}. When candidate metadata predates ` +
+    `this storage item, the still-present runtime-447 values are retained as a frozen baseline ` +
+    `term. Their constant offset preserves comparison with the current residual and cannot ` +
+    `create or hide discrepancy movement.\n\n` +
     `The “above baseline” marker is comparative, not a tolerance in the accounting formula. It uses the preceding adjacent-block measurement of 2–3 rao per block to identify movements too large to be explained by that observed drift.\n`;
 }
 
 function discrepancyTable(rows, baselineBound) {
   if (rows.length === 0) return `_None._\n`;
-  return `| Netuid | Tempo | Epochs | LastEpochBlock advance | Δ earlier α | Δ later α | Signed Δ change α | Absolute direction | Above baseline |\n` +
+  return `| Netuid | Tempo | Epochs | Epoch marker advance | Δ earlier α | Δ later α | Signed Δ change α | Absolute direction | Above baseline |\n` +
     `|---:|---:|---:|---:|---:|---:|---:|---|---|\n` +
     rows.map((row) =>
       `| ${row.netuid} | ${row.tempo} | ${row.epochCount.toString()} | ` +
