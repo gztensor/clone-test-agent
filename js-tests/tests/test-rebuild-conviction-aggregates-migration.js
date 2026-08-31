@@ -1,15 +1,33 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { blake2AsHex } from "@polkadot/util-crypto";
 import { connectApi } from "../lib/api.js";
 import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
-const PRIOR_RUNTIME = Number(process.env.PRIOR_RUNTIME ?? 451);
+const PRIOR_RUNTIME = Number(process.env.PRIOR_RUNTIME ?? 452);
 const CANDIDATE_RUNTIME = Number(process.env.CANDIDATE_RUNTIME ?? 452);
 const PRE_UPGRADE_HEADS = Number(process.env.PRE_UPGRADE_HEADS ?? 6);
 const POST_UPGRADE_HEADS = Number(process.env.POST_UPGRADE_HEADS ?? 10);
 const TEST_TIMEOUT_MS = Number(process.env.MIGRATION_TEST_TIMEOUT_MS ?? 20 * 60_000);
 const MIGRATION_NAME = "migrate_rebuild_conviction_aggregates";
+const CODE_STORAGE_KEY = "0x3a636f6465";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_WASM_PATH = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "subtensor-reference",
+  "target",
+  "release",
+  "wbuild",
+  "node-subtensor-runtime",
+  "node_subtensor_runtime.compact.compressed.wasm",
+);
+const WASM_PATH = process.env.RUNTIME_WASM_PATH ?? DEFAULT_WASM_PATH;
 const logger = createTempLogger("rebuild-conviction-aggregates-migration.log");
 
 async function main() {
@@ -25,18 +43,34 @@ async function main() {
       PRIOR_RUNTIME,
       `expected pre-upgrade runtime ${PRIOR_RUNTIME}`,
     );
-
-    const observations = await observeUpgrade(api);
-    const activationIndex = observations.findIndex(
-      ({ specVersion }) => specVersion === CANDIDATE_RUNTIME,
+    assert.ok(fs.existsSync(WASM_PATH), `runtime wasm not found: ${WASM_PATH}`);
+    const candidateCodeHash = blake2AsHex(fs.readFileSync(WASM_PATH), 256);
+    const initialCodeHash = (await api.rpc.state.getStorageHash(CODE_STORAGE_KEY)).toHex();
+    assert.notEqual(
+      initialCodeHash,
+      candidateCodeHash,
+      "fresh clone already contains the candidate runtime code",
     );
-    assert.ok(activationIndex >= 0, `runtime ${CANDIDATE_RUNTIME} was not observed`);
+    const initialMarker = await api.query.subtensorModule.hasMigrationRun(MIGRATION_NAME);
+    assert.equal(initialMarker.isTrue, false, "migration marker is already set before upgrade");
+    await logger.info(`initial_runtime=${initialRuntime.specVersion.toNumber()}`);
+    await logger.info(`initial_code_hash=${initialCodeHash}`);
+    await logger.info(`candidate_code_hash=${candidateCodeHash}`);
+    await logger.info(`initial_migration_marker=${initialMarker.isTrue}`);
+
+    const observations = await observeUpgrade(api, candidateCodeHash);
+    const activationIndex = observations.findIndex(
+      ({ codeHash }) => codeHash === candidateCodeHash,
+    );
+    assert.ok(activationIndex >= 0, `candidate code hash ${candidateCodeHash} was not observed`);
 
     const activation = observations[activationIndex];
     const prior = observations[activationIndex - 1];
     assert.ok(prior, "no block immediately before runtime activation was observed");
     assert.equal(prior.height + 1, activation.height, "runtime activation observations are not adjacent");
     assert.equal(prior.specVersion, PRIOR_RUNTIME, "unexpected runtime before activation");
+    assert.notEqual(prior.codeHash, candidateCodeHash, "candidate code was active before activation");
+    assert.equal(activation.specVersion, CANDIDATE_RUNTIME, "unexpected candidate runtime version");
 
     const completion = await findMigrationCompletion(api, observations, activationIndex);
     const cadence = calculateCadence(observations, activationIndex, completion?.height);
@@ -125,7 +159,7 @@ function assertRequiredStorage(api) {
   assert.equal(missing.length, 0, `missing storage: ${missing.map(([name]) => name).join(", ")}`);
 }
 
-async function observeUpgrade(api) {
+async function observeUpgrade(api, candidateCodeHash) {
   const observations = [];
   let unsubscribe;
   let settled = false;
@@ -145,9 +179,10 @@ async function observeUpgrade(api) {
             if (settled) return;
             const height = header.number.toNumber();
             const hash = header.hash.toString();
-            const [runtime, timestamp] = await Promise.all([
+            const [runtime, timestamp, codeHash] = await Promise.all([
               api.rpc.state.getRuntimeVersion(hash),
               api.query.timestamp.now.at(hash),
+              api.rpc.state.getStorageHash(CODE_STORAGE_KEY, hash),
             ]);
             const observation = {
               height,
@@ -155,14 +190,15 @@ async function observeUpgrade(api) {
               receivedAtMs,
               timestampMs: Number(timestamp.toBigInt()),
               specVersion: runtime.specVersion.toNumber(),
+              codeHash: codeHash.toHex(),
             };
             observations.push(observation);
             await logger.info(
-              `head block=${height} runtime=${observation.specVersion} received_at_ms=${receivedAtMs} chain_timestamp_ms=${observation.timestampMs}`,
+              `head block=${height} runtime=${observation.specVersion} code_hash=${observation.codeHash} received_at_ms=${receivedAtMs} chain_timestamp_ms=${observation.timestampMs}`,
             );
 
             const activationIndex = observations.findIndex(
-              ({ specVersion }) => specVersion === CANDIDATE_RUNTIME,
+              ({ codeHash: observedCodeHash }) => observedCodeHash === candidateCodeHash,
             );
             if (activationIndex < 0 && observations.length === PRE_UPGRADE_HEADS) {
               await logger.info("READY_FOR_RUNTIME_UPGRADE");

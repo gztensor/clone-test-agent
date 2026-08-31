@@ -10,6 +10,7 @@ import { createTempLogger } from "../lib/file-log.js";
 
 const WS_ENDPOINT = process.env.WS_ENDPOINT ?? "ws://127.0.0.1:9944";
 const RUNTIME_UPGRADE_RPC_TIMEOUT_MS = Number(process.env.RUNTIME_UPGRADE_RPC_TIMEOUT_MS ?? 300_000);
+const SET_CODE_WITHOUT_CHECKS = process.env.RUNTIME_SET_CODE_WITHOUT_CHECKS === "1";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -63,6 +64,16 @@ async function submitAndWait(api, signer, tx, label) {
             finish(reject, new Error(`${label} failed: ${formatDispatchError(api, error)}`));
             return;
           }
+          if (event.section === "sudo" && event.method === "Sudid") {
+            const [result] = event.data;
+            if (result.isErr) {
+              finish(
+                reject,
+                new Error(`${label} failed: ${formatDispatchError(api, result.asErr)}`),
+              );
+              return;
+            }
+          }
         }
       }
 
@@ -90,6 +101,12 @@ async function main() {
   try {
     assert.ok(api.tx.sudo?.sudo, "Sudo.sudo is not available in runtime metadata");
     assert.ok(api.tx.system?.setCode, "System.setCode is not available in runtime metadata");
+    if (SET_CODE_WITHOUT_CHECKS) {
+      assert.ok(
+        api.tx.system?.setCodeWithoutChecks,
+        "System.setCodeWithoutChecks is not available in runtime metadata",
+      );
+    }
 
     const sudoKey = await api.query.sudo.key();
     assert.equal(
@@ -106,11 +123,16 @@ async function main() {
     console.log("runtime before:", before.specName.toString(), before.specVersion.toString());
     console.log("wasm:", WASM_PATH);
     console.log("wasm bytes:", wasm.length);
+    console.log("runtime call:", SET_CODE_WITHOUT_CHECKS ? "setCodeWithoutChecks" : "setCode");
+
+    const setCodeCall = SET_CODE_WITHOUT_CHECKS
+      ? api.tx.system.setCodeWithoutChecks(`0x${wasm.toString("hex")}`)
+      : api.tx.system.setCode(`0x${wasm.toString("hex")}`);
 
     const blockHash = await submitAndWait(
       api,
       alice,
-      api.tx.sudo.sudo(api.tx.system.setCode(`0x${wasm.toString("hex")}`)),
+      api.tx.sudo.sudo(setCodeCall),
       "runtime upgrade"
     );
 
