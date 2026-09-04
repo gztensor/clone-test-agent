@@ -4,6 +4,7 @@
     "test": "node tests/clone-smoke-test.js",
     "patch:dev-chainspec": "node scripts/patch-dev-chainspec.js",
     "runtime:update:alice": "node scripts/update-runtime-with-alice.js",
+    "test:runtime-454-cleanup-migrations": "node tests/test-runtime-454-cleanup-migrations.js",
     "test:staking-hotkeys-cleanup": "node tests/test-staking-hotkeys-cleanup-migration.js",
     "test:rebuild-conviction-aggregates-migration": "node tests/test-rebuild-conviction-aggregates-migration.js",
     "test:balancer-operation": "node tests/test-balancer-operation.js",
