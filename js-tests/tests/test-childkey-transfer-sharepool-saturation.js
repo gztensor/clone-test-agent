@@ -107,11 +107,13 @@ async function main() {
     );
     assert.ok(firstDividend.daveEmission > 0n, "Dave must receive a positive pool-wide dividend");
     const transferFloor = await readSameSubnetTransferFloor();
-    const seed = selectSeedAmount(firstDividend.after.daveTotal, transferFloor.minimumAlpha + 1n);
+    const seedMinimum = transferFloor.minimumAlpha * 2n;
+    const seed = selectSeedAmount(firstDividend.after.daveTotal, seedMinimum);
     console.log(
       "bit-exact live seed selected:",
       `observedDaveValue=${firstDividend.after.daveTotal}`,
       `minimumTransferAlpha=${transferFloor.minimumAlpha}`,
+      `seedMinimumWithPriceMargin=${seedMinimum}`,
       `seedTaoEquivalent=${seed.transfer * transferFloor.price / RAO_PER_TAO}`,
       `transfer=${seed.transfer}`,
       `moveBack=${seed.moveBack}`,
